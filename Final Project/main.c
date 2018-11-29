@@ -44,19 +44,21 @@ void main(void)
     __enable_irq();
     SysTick_Init(); //initializes timer
     LCD_init(); //initializes LCD
+    char time[17];
 
     while(1)
     {
+
+
         if(RTC_flag)
         {
+            commandWrite(0x01);
+            sprintf(time,"    %d:%.2d:%.2d       ", now.hour,now.min,now.sec);
+            displayText(time,1);
             printRTC();
             RTC_flag = 0;
         }
-        if(RTC_alarm)
-        {
-            printf("ALARM\n");
-            RTC_alarm = 0;
-        }
+
     }
 }
 
@@ -64,8 +66,8 @@ void configRTC(void)
 {
     RTC_C->CTL0     =   0xA500;     //Write Code, IE on RTC Ready
     RTC_C->CTL13    =   0x0000;
-    RTC_C->TIM0     = 00<<8 | 00;
-    RTC_C->TIM1     = 2<<8 | 12;
+    RTC_C->TIM0     = 00<<8 | 50;
+    RTC_C->TIM1     = 1;
 
     RTC_C->PS1CTL   = 0b11010;
 
@@ -189,7 +191,7 @@ void LCD_init(void) //initializes LCD
 void commandWrite(uint8_t command) //writes a command to LCD using RS = 0
 {
     P7->OUT &= ~BIT0; //rs=0
-    sysTickDelay_ms(5);
+    sysTickDelay_ms(2);
     P7->OUT &= ~0xF0; //clears data pins
     sysTickDelay_us(5);
     pushByte(command);
@@ -200,7 +202,7 @@ void commandWrite(uint8_t command) //writes a command to LCD using RS = 0
 void dataWrite(uint8_t data) //writes data to LCD using RS = 1
 {
     P7->OUT |= BIT0; //rs=1
-    sysTickDelay_ms(5);
+    sysTickDelay_ms(2);
     P7->OUT &= ~0xF0; //clears data pins
     sysTickDelay_us(5);
     pushByte(data);
