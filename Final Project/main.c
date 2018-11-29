@@ -3,10 +3,24 @@
 #include <string.h>
 
 
-void configRTC(void);
+void configRTC(int hour, int min);
 void printRTC(void);
 
+enum states{
+    MENU,
+    SETALARM,
+    SETTIME
+};
 
+enum settime{
+    HOUR,
+    MIN,
+    SEC
+};
+enum settime setTimeState = HOUR;
+enum states state = MENU;
+int test = 12;
+int incFlag = 0;
 void LCD_init(void);
 void commandWrite(uint8_t command);
 void pushByte(uint8_t byte);
@@ -16,6 +30,8 @@ void sysTickDelay_ms(int ms);
 void sysTickDelay_us(int microsec);
 void dataWrite(uint8_t data);
 void displayText(char text[], int lineNum);
+
+void intButt();
 // global struct variable called now
 struct
 {
@@ -39,35 +55,75 @@ void main(void)
 {
     WDT_A->CTL = WDT_A_CTL_PW | WDT_A_CTL_HOLD;     // stop watchdog timer
     __disable_irq();
-    configRTC();
+    configRTC(12,0);
     NVIC_EnableIRQ(RTC_C_IRQn);
     __enable_irq();
     SysTick_Init(); //initializes timer
     LCD_init(); //initializes LCD
+    intButt();
     char time[17];
+    int hour=12, min=0;
+    sysTickDelay_ms(500);
 
     while(1)
     {
 
 
-        if(RTC_flag)
+
+        switch(state)
         {
-            commandWrite(0x01);
-            sprintf(time,"    %d:%.2d:%.2d       ", now.hour,now.min,now.sec);
-            displayText(time,1);
-            printRTC();
-            RTC_flag = 0;
+        case MENU:
+            if(RTC_flag)
+            {
+                commandWrite(0x01);
+                sprintf(time,"    %d:%.2d:%.2d       ", now.hour,now.min,now.sec);
+                displayText(time,1);
+                //printRTC();
+                RTC_flag = 0;
+            }
+            break;
+        case SETTIME:
+
+            if(incFlag)
+            {
+                hour++;
+                if(hour > 12)
+                {
+                    hour = hour - 12;
+                }
+                configRTC(hour, min);
+
+                incFlag = 0;
+            }
+            if(RTC_flag)
+            {
+                commandWrite(0x01);
+                sprintf(time,"    %d:%.2d:%.2d       ", now.hour,now.min,0);
+                displayText(time,1);
+                sysTickDelay_ms(500);
+                commandWrite(0x01);
+                sprintf(time,"      :%.2d:%.2d       ", now.min,0);
+                displayText(time,1);
+
+                //printRTC();
+                RTC_flag = 0;
+            }
+            break;
+        case SETALARM:
+            P2->OUT |= BIT0;
+            break;
         }
+
 
     }
 }
 
-void configRTC(void)
+void configRTC(int hour, int min)
 {
     RTC_C->CTL0     =   0xA500;     //Write Code, IE on RTC Ready
     RTC_C->CTL13    =   0x0000;
-    RTC_C->TIM0     = 00<<8 | 50;
-    RTC_C->TIM1     = 1;
+    RTC_C->TIM0     = min<<8 | 00;
+    RTC_C->TIM1     = hour;
 
     RTC_C->PS1CTL   = 0b11010;
 
@@ -252,6 +308,62 @@ void sysTickDelay_us(int microsec) //timer microseconds
     while((SysTick->CTRL & BIT(16))==0);
 }
 
+void intButt()
+{
+    P1->SEL0 &= ~BIT0;
+    P1->SEL1 &= ~BIT0;
+    P1->DIR  |=  BIT0;
+    P1->OUT &= ~BIT0;
+    //4.0-4.3 for buttons
 
+//    P2->SEL0 &= ~(BIT1|BIT4);
+//    P2->SEL1 &= ~(BIT1|BIT4);
+//    P2->DIR  &= ~(BIT1|BIT4);
+//    P2->REN  |=  (BIT1|BIT4);
+//    P2->OUT  |=  (BIT1|BIT4);
+//    P2->IE   |=  (BIT1|BIT4);
+//    P2->IES  |=  (BIT1|BIT4);
+//
+//   NVIC_EnableIRQ(PORT2_IRQn);
 
+   P4->SEL0 &= ~(BIT0|BIT1|BIT2|BIT3);
+   P4->SEL1 &= ~(BIT0|BIT1|BIT2|BIT3);
+   P4->DIR  &= ~(BIT0|BIT1|BIT2|BIT3);
+   P4->REN  |=  (BIT0|BIT1|BIT2|BIT3);
+   P4->OUT  |=  (BIT0|BIT1|BIT2|BIT3);
+   P4->IE   |=  (BIT0|BIT1|BIT2|BIT3);
+   P4->IES  |=  (BIT0|BIT1|BIT2|BIT3);
+
+   NVIC_EnableIRQ(PORT4_IRQn);
+
+}
+
+void PORT4_IRQHandler()
+{
+
+    if((P4->IFG & BIT0)&(state == MENU))
+    {
+        P4->IFG &= ~(BIT0);
+        state = SETTIME;
+    }
+
+    if((P4->IFG & BIT2))//&(state == MENU))
+    {
+        P4->IFG &= ~(BIT2);
+        state = SETALARM;
+        P1->OUT ^= BIT0;
+    }
+
+    if(state == SETTIME)
+    {
+        if(P4->IFG & BIT1)
+        {
+            P4->IFG &= ~(BIT1);
+            incFlag = 1;
+        }
+
+    }
+
+        P4->IFG &= ~(0xF);
+}
 
