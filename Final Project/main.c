@@ -1,10 +1,12 @@
 #include "msp.h"
 #include "stdio.h"
 
+
 void RTC_Init();
 
 int time_update = 0, alarm_update = 0;
 uint8_t hours, mins, secs;
+
 void main(void)
 {
 	WDT_A->CTL = WDT_A_CTL_PW | WDT_A_CTL_HOLD;		// stop watchdog timer
