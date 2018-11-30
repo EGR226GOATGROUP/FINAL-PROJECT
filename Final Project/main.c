@@ -62,15 +62,15 @@ void main(void)
 {
     WDT_A->CTL = WDT_A_CTL_PW | WDT_A_CTL_HOLD;     // stop watchdog timer
     __disable_irq();
-    configRTC(12,0);
     intButt();
-    NVIC_EnableIRQ(RTC_C_IRQn);
-    __enable_irq();
+    configRTC(12,0);
+    __enable_interrupt();
     SysTick_Init(); //initializes timer
     LCD_init(); //initializes LCD
     char time[17];
     enum states state = MENU;
     int hour = 12;
+
     while(1)
     {
         if(setTimeFlag)
@@ -150,6 +150,7 @@ void configRTC(int hour, int min)
     RTC_C->AMINHR   = 12<<8 | 31 | BIT(15) | BIT(7);
 
     RTC_C->CTL0     = ((0xA500) | BIT5);
+    NVIC_EnableIRQ(RTC_C_IRQn);
 
 }
 
@@ -173,7 +174,7 @@ void RTC_C_IRQHandler(void)
 
 
 
-void intButt()
+void intButt(void)
 {
     P1->SEL0 &= ~BIT0;
     P1->SEL1 &= ~BIT0;
@@ -187,14 +188,15 @@ void intButt()
    P4->REN  |=  (BIT0|BIT1|BIT2|BIT3);
    P4->OUT  |=  (BIT0|BIT1|BIT2|BIT3);
    P4->IE   |=  (BIT0|BIT1|BIT2|BIT3);
-   P4->IES  |=  (BIT0|BIT1|BIT2|BIT3);
+   //P4->IES  |=  (BIT0|BIT1|BIT2|BIT3);
 
-   NVIC_EnableIRQ(PORT4_IRQn);
+  NVIC_EnableIRQ(PORT4_IRQn);
 
 }
 
 void PORT4_IRQHandler()
 {
+
    if(P4->IFG & BIT0)
     {
         P4->IFG &= ~(BIT0);
