@@ -1,3 +1,18 @@
+/*                  Pin Reference
+ * LCD
+ * 7.2 -> E
+ * 7.4 -> DB4
+ * 7.5 -> DB5
+ * 7.6 -> DB6
+ * 7.7 -> DB7
+ *
+ * Buttons
+ * 4.0 -> TimeSet
+ * 4.1 ->
+ * 4.2 ->
+ * 4.3 ->
+ */
+
 #include "msp.h"
 #include <stdio.h>
 #include <string.h>
