@@ -5,6 +5,17 @@
 
 void configRTC(int hour, int min);
 void printRTC(void);
+void LCD_init(void);
+void commandWrite(uint8_t command);
+void pushByte(uint8_t byte);
+void pushNibble(uint8_t nibble);
+void pulseEnablePin(void);
+void sysTickDelay_ms(int ms);
+void sysTickDelay_us(int microsec);
+void dataWrite(uint8_t data);
+void displayText(char text[], int lineNum);
+void SysTick_Init(void);
+void intButt();
 
 enum states{
     MENU,
@@ -17,21 +28,9 @@ enum settime{
     MIN,
     SEC
 };
-enum settime setTimeState = HOUR;
-enum states state = MENU;
-int test = 12;
-int incFlag = 0;
-void LCD_init(void);
-void commandWrite(uint8_t command);
-void pushByte(uint8_t byte);
-void pushNibble(uint8_t nibble);
-void pulseEnablePin(void);
-void sysTickDelay_ms(int ms);
-void sysTickDelay_us(int microsec);
-void dataWrite(uint8_t data);
-void displayText(char text[], int lineNum);
 
-void intButt();
+
+
 // global struct variable called now
 struct
 {
@@ -40,36 +39,29 @@ struct
     uint8_t hour;
 } now;
 
-uint8_t RTC_flag = 0, RTC_alarm;
+int RTC_flag = 0, RTC_alarm = 0, setTimeFlag = 0;
 
 
-void SysTick_Init(void) //initializes systick timer
-{
-    SysTick->CTRL = 0;
-    SysTick->LOAD = 0x00FFFFFF; //sets max value
-    SysTick->VAL = 0; //sets min value
-    SysTick->CTRL = 0x00000005; //enables timer
-}
+
 
 void main(void)
 {
     WDT_A->CTL = WDT_A_CTL_PW | WDT_A_CTL_HOLD;     // stop watchdog timer
     __disable_irq();
     configRTC(12,0);
+    intButt();
     NVIC_EnableIRQ(RTC_C_IRQn);
     __enable_irq();
     SysTick_Init(); //initializes timer
     LCD_init(); //initializes LCD
-    intButt();
     char time[17];
-    int hour=12, min=0;
-    sysTickDelay_ms(500);
-
+    enum states state = MENU;
     while(1)
     {
-
-
-
+        if(setTimeFlag)
+        {
+            P1->OUT |= BIT0;
+        }
         switch(state)
         {
         case MENU:
@@ -78,24 +70,13 @@ void main(void)
                 commandWrite(0x01);
                 sprintf(time,"    %d:%.2d:%.2d       ", now.hour,now.min,now.sec);
                 displayText(time,1);
-                //printRTC();
                 RTC_flag = 0;
             }
+
             break;
         case SETTIME:
 
-            if(incFlag)
-            {
-                hour++;
-                if(hour > 12)
-                {
-                    hour = hour - 12;
-                }
-                configRTC(hour, min);
-
-                incFlag = 0;
-            }
-            if(RTC_flag)
+           if(RTC_flag)
             {
                 commandWrite(0x01);
                 sprintf(time,"    %d:%.2d:%.2d       ", now.hour,now.min,0);
@@ -104,13 +85,10 @@ void main(void)
                 commandWrite(0x01);
                 sprintf(time,"      :%.2d:%.2d       ", now.min,0);
                 displayText(time,1);
-
-                //printRTC();
                 RTC_flag = 0;
             }
             break;
         case SETALARM:
-            P2->OUT |= BIT0;
             break;
         }
 
@@ -133,11 +111,7 @@ void configRTC(int hour, int min)
 
 }
 
-void printRTC(void)
-{
-    printf("%02d:%02d:%02d\n",now.hour, now.min, now.sec);
 
-}
 
 void RTC_C_IRQHandler(void)
 {
@@ -154,6 +128,77 @@ void RTC_C_IRQHandler(void)
     }
 
 }
+
+
+
+void intButt()
+{
+    P1->SEL0 &= ~BIT0;
+    P1->SEL1 &= ~BIT0;
+    P1->DIR  |=  BIT0;
+    P1->OUT &= ~BIT0;
+    //4.0-4.3 for buttons
+
+   P4->SEL0 &= ~(BIT0|BIT1|BIT2|BIT3);
+   P4->SEL1 &= ~(BIT0|BIT1|BIT2|BIT3);
+   P4->DIR  &= ~(BIT0|BIT1|BIT2|BIT3);
+   P4->REN  |=  (BIT0|BIT1|BIT2|BIT3);
+   P4->OUT  |=  (BIT0|BIT1|BIT2|BIT3);
+   P4->IE   |=  (BIT0);//|BIT1|BIT2|BIT3);
+   P4->IES  |=  (BIT0);//|BIT1|BIT2|BIT3);
+
+   NVIC_EnableIRQ(PORT4_IRQn);
+
+}
+
+void PORT4_IRQHandler()
+{
+
+    if(P4->IFG & BIT0)
+    {
+        P4->IFG &= ~(BIT0);
+        setTimeFlag = 1;
+    }
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -293,6 +338,14 @@ void pulseEnablePin(void) //sends data to LCD by pulsing enable pin on and off
 
 }
 
+void SysTick_Init(void) //initializes systick timer
+{
+    SysTick->CTRL = 0;
+    SysTick->LOAD = 0x00FFFFFF; //sets max value
+    SysTick->VAL = 0; //sets min value
+    SysTick->CTRL = 0x00000005; //enables timer
+}
+
 void sysTickDelay_ms(int ms) //timer ms
 {
     SysTick->LOAD = ((ms*3000)-1);
@@ -306,64 +359,5 @@ void sysTickDelay_us(int microsec) //timer microseconds
     SysTick->LOAD = ((microsec*3)-1);
     SysTick->VAL = 0;
     while((SysTick->CTRL & BIT(16))==0);
-}
-
-void intButt()
-{
-    P1->SEL0 &= ~BIT0;
-    P1->SEL1 &= ~BIT0;
-    P1->DIR  |=  BIT0;
-    P1->OUT &= ~BIT0;
-    //4.0-4.3 for buttons
-
-//    P2->SEL0 &= ~(BIT1|BIT4);
-//    P2->SEL1 &= ~(BIT1|BIT4);
-//    P2->DIR  &= ~(BIT1|BIT4);
-//    P2->REN  |=  (BIT1|BIT4);
-//    P2->OUT  |=  (BIT1|BIT4);
-//    P2->IE   |=  (BIT1|BIT4);
-//    P2->IES  |=  (BIT1|BIT4);
-//
-//   NVIC_EnableIRQ(PORT2_IRQn);
-
-   P4->SEL0 &= ~(BIT0|BIT1|BIT2|BIT3);
-   P4->SEL1 &= ~(BIT0|BIT1|BIT2|BIT3);
-   P4->DIR  &= ~(BIT0|BIT1|BIT2|BIT3);
-   P4->REN  |=  (BIT0|BIT1|BIT2|BIT3);
-   P4->OUT  |=  (BIT0|BIT1|BIT2|BIT3);
-   P4->IE   |=  (BIT0|BIT1|BIT2|BIT3);
-   P4->IES  |=  (BIT0|BIT1|BIT2|BIT3);
-
-   NVIC_EnableIRQ(PORT4_IRQn);
-
-}
-
-void PORT4_IRQHandler()
-{
-
-    if((P4->IFG & BIT0)&(state == MENU))
-    {
-        P4->IFG &= ~(BIT0);
-        state = SETTIME;
-    }
-
-    if((P4->IFG & BIT2))//&(state == MENU))
-    {
-        P4->IFG &= ~(BIT2);
-        state = SETALARM;
-        P1->OUT ^= BIT0;
-    }
-
-    if(state == SETTIME)
-    {
-        if(P4->IFG & BIT1)
-        {
-            P4->IFG &= ~(BIT1);
-            incFlag = 1;
-        }
-
-    }
-
-        P4->IFG &= ~(0xF);
 }
 
