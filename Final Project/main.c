@@ -21,7 +21,6 @@
 
 
 void configRTC(int hour, int min);
-void printRTC(void);
 void LCD_init(void);
 void commandWrite(uint8_t command);
 void pushByte(uint8_t byte);
@@ -56,7 +55,7 @@ struct
     uint8_t hour;
 } now;
 
-int RTC_flag = 0, RTC_alarm = 0, setTimeFlag = 0;
+int RTC_flag = 0, RTC_alarm = 0, setTimeFlag = 0,incFlag = 0;
 
 
 
@@ -73,12 +72,14 @@ void main(void)
     LCD_init(); //initializes LCD
     char time[17];
     enum states state = MENU;
+    int hour = 12;
     while(1)
     {
         if(setTimeFlag)
         {
-            P1->OUT |= BIT0;
+            state = SETTIME;
         }
+
         switch(state)
         {
         case MENU:
@@ -95,17 +96,43 @@ void main(void)
 
            if(RTC_flag)
             {
-                commandWrite(0x01);
-                sprintf(time,"    %d:%.2d:%.2d       ", now.hour,now.min,0);
-                displayText(time,1);
-                sysTickDelay_ms(500);
-                commandWrite(0x01);
-                sprintf(time,"      :%.2d:%.2d       ", now.min,0);
-                displayText(time,1);
-                RTC_flag = 0;
+               if(hour < 10)
+               {
+                   commandWrite(0x01);
+                   sprintf(time,"     %d:%.2d:%.2d       ", now.hour,now.min,0);
+                   displayText(time,1);
+                   sysTickDelay_ms(500);
+                   commandWrite(0x01);
+                   sprintf(time,"      :%.2d:%.2d       ", now.min,0);
+                   displayText(time,1);
+                   RTC_flag = 0;
+               }
+               else if(hour >= 10)
+               {
+                   commandWrite(0x01);
+                   sprintf(time,"    %d:%.2d:%.2d       ", now.hour,now.min,0);
+                   displayText(time,1);
+                   sysTickDelay_ms(500);
+                   commandWrite(0x01);
+                   sprintf(time,"      :%.2d:%.2d       ", now.min,0);
+                   displayText(time,1);
+                   RTC_flag = 0;
+               }
+
             }
+           if(incFlag)
+           {
+               hour++;
+               if(hour > 12)
+               {
+                   hour = 1;
+               }
+               sysTickDelay_us(50);
+               configRTC(hour,0);
+               incFlag = 0;
+           }
             break;
-        case SETALARM:
+            case SETALARM:
             break;
         }
 
@@ -161,8 +188,8 @@ void intButt()
    P4->DIR  &= ~(BIT0|BIT1|BIT2|BIT3);
    P4->REN  |=  (BIT0|BIT1|BIT2|BIT3);
    P4->OUT  |=  (BIT0|BIT1|BIT2|BIT3);
-   P4->IE   |=  (BIT0);//|BIT1|BIT2|BIT3);
-   P4->IES  |=  (BIT0);//|BIT1|BIT2|BIT3);
+   P4->IE   |=  (BIT0|BIT1|BIT2|BIT3);
+   P4->IES  |=  (BIT0|BIT1|BIT2|BIT3);
 
    NVIC_EnableIRQ(PORT4_IRQn);
 
@@ -170,12 +197,17 @@ void intButt()
 
 void PORT4_IRQHandler()
 {
-
-    if(P4->IFG & BIT0)
+   if(P4->IFG & BIT0)
     {
         P4->IFG &= ~(BIT0);
         setTimeFlag = 1;
     }
+
+   if(P4->IFG & BIT1)
+   {
+       P4->IFG &= ~(BIT1);
+       incFlag = 1;
+   }
 
 }
 
