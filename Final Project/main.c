@@ -71,13 +71,22 @@ void main(void)
     LCD_init(); //initializes LCD
     char time[17];
     enum states state = MENU;
-    int hour = 12;
+    int hour = 12,min = 0;
+    int setTimeCount = 0;
 
     while(1)
     {
         if(setTimeFlag)
         {
+            setTimeFlag = 0;
+            //sysTickDelay_us(500);
             state = SETTIME;
+            setTimeCount++;
+            if(setTimeCount == 2)
+            {
+                setTimeCount = 0;
+                state = MENU;
+            }
         }
 
         switch(state)
@@ -85,12 +94,22 @@ void main(void)
         case MENU:
             if(RTC_flag)
             {
-                commandWrite(0x01);
-                sprintf(time,"    %d:%.2d:%.2d       ", now.hour,now.min,now.sec);
-                displayText(time,1);
-                RTC_flag = 0;
-            }
+                if(now.hour<10)
+                {
+                    commandWrite(0x01);
+                    sprintf(time,"     %d:%.2d:%.2d       ", now.hour,now.min,now.sec);
+                    displayText(time,1);
+                    RTC_flag = 0;
+                }
+                else if(now.hour>10)
+                {
+                    commandWrite(0x01);
+                    sprintf(time,"    %d:%.2d:%.2d       ", now.hour,now.min,now.sec);
+                    displayText(time,1);
+                    RTC_flag = 0;
+                }
 
+            }
             break;
         case SETTIME:
 
@@ -120,17 +139,36 @@ void main(void)
                }
 
             }
-           if(incFlag)
+           if(setTimeCount == 1)
            {
-               hour++;
-               if(hour > 12)
+               if(incFlag)
                {
-                   hour = 1;
+                   hour++;
+                   if(hour > 12)
+                   {
+                       hour = 1;
+                   }
+                   sysTickDelay_us(50);
+                   configRTC(hour,0);
+                   incFlag = 0;
                }
-               sysTickDelay_us(50);
-               configRTC(hour,0);
-               incFlag = 0;
            }
+//           else if(setTimeCount == 2)
+//           {
+//               if(incFlag)
+//               {
+//                   min++;
+//                   if(min > 59)
+//                   {
+//                       min = 0;
+//                   }
+//                   sysTickDelay_us(50);
+//                   configRTC(hour,min);
+//                   incFlag = 0;
+//               }
+//           }
+
+
             break;
             case SETALARM:
             break;
