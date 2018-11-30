@@ -8,12 +8,12 @@
  *
  * Buttons
  * 4.0 -> TimeSet
- * 4.1 ->
- * 4.2 ->
- * 4.3 ->
+ * 4.1 -> incroment
+ * 4.2 -> AlarmSet
+ * 4.3 -> Snozze/Down
  */
 
-//TEST FROM DESKTOP AGAIN 2
+//Hey Did this work
 
 #include "msp.h"
 #include <stdio.h>
@@ -251,53 +251,7 @@ void PORT4_IRQHandler()
 
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+//--------------------------------------------------------------------------------------------
 
 void displayText(char text[], int lineNum) //function to display text on a given line
 {
