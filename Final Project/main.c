@@ -25,6 +25,10 @@
 
 #define ADC_CONVERSION_RATE 1500000
 #define CLEAR 0x01
+#define SETTIME BIT0
+#define ALARM BIT2
+#define SETALARM BIT1
+#define SNOOZE BIT3
 
 void configRTC(int hour, int min);
 void ADC14init(void);
@@ -44,6 +48,7 @@ void sysTickDelay_ms(int ms);
 void sysTickDelay_us(int microsec);
 void SysTick_Init();
 
+int setTime=0, setAlarm=0;
 int hour=0,min=0,sec=0,RTC_flag=0;
 float temp=0, voltage = 0, raw = 0;
 char time[2],tempAr[3];
@@ -61,12 +66,12 @@ struct
 void main(void)
 {
     WDT_A->CTL = WDT_A_CTL_PW | WDT_A_CTL_HOLD;     // stop watchdog timer
-    __enable_interrupt();
+    intButtons();
     SysTick_Init();                                 //initializes timer
     tempT32interrupt();
     LCD_init();                                     //initializes LCD
     ADC14init();
-    intButtons();
+    __enable_interrupt();
 
     configRTC(12, 30);
     commandWrite(CLEAR);
@@ -74,41 +79,48 @@ void main(void)
     {
 
     }
-
 }
-
-
 
 //--------------------------------------------------Interrupts------------------------------------------------------------------------
 
 void T32_INT1_IRQHandler()                          //Interrupt Handler for Timer 2
 {
     TIMER32_1->INTCLR = 1;                          //Clear interrupt flag so it does not interrupt again immediately.
-    ADC14->CTL0         |=  0b1;              //Start ADC Conversion
+    ADC14->CTL0         |=  0b1;                    //Start ADC Conversion
 
 }
 
 void PORT4_IRQHandler()
 {
-    if(P4->IFG & BIT0)
+    if(P4->IFG & SETTIME)                               //SetTime Button Press
     {
-        displayAt("Button1", 4, 2);
-        P4->IFG &= ~BIT0;
+        displayAt("SETTIME    ", 4, 2);             //Debugging Display
+
+        if(setTime==0)                                  //First press
+        {
+
+        }
+
+        setTime++;
+        P4->IFG &= ~SETTIME;
     }
-    if(P4->IFG & BIT1)
+    if(P4->IFG & ALARM)                                 //Alarm toggle/Up Button Press
     {
-        displayAt("Button2", 4, 2);
-        P4->IFG &= ~BIT1;
+        displayAt("ALARM    ", 4, 2);               //Debugging Display
+        P4->IFG &= ~ALARM;
     }
-    if(P4->IFG & BIT2)
+    if(P4->IFG & SETALARM)                              //SetAlarm Button Press
     {
-        displayAt("Button3", 4, 2);
-        P4->IFG &= ~BIT2;
+        displayAt("SETALARM   ", 4, 2);             //Debugging Display
+
+
+        setAlarm++;
+        P4->IFG &= ~SETALARM;
     }
-    if(P4->IFG & BIT3)
+    if(P4->IFG & SNOOZE)                                //Snooze/Down Button Press
     {
-        displayAt("Button4", 4, 2);
-        P4->IFG &= ~BIT3;
+        displayAt("SNOOZE    ", 4, 2);              //Debugging Display
+        P4->IFG &= ~SNOOZE;
     }
 }
 
