@@ -217,21 +217,18 @@ void PORT4_IRQHandler()
         }
         else if(timePresses==2)                         //incoment Minutes
         {
-            now.min++;;
+            now.min++;
             if(now.min>59)
                 now.min=0;                                  //Minutes reset
             displayMin();
         }
 
-        displayAt("ALARM    ", 4, 2);               //Debugging Display
         P4->IFG &= ~(ALARM|UP);
     }
 
     //SetAlarm Button Press
     if(P4->IFG & SETALARM)                              //SetAlarm Button Press
     {
-        displayAt("SETALARM   ", 4, 2);             //Debugging Display
-
 
         alarmPresses++;
         P4->IFG &= ~SETALARM;
@@ -240,7 +237,26 @@ void PORT4_IRQHandler()
     //Snooze/Down Button Press
     if(P4->IFG & SNOOZE)
     {
-        displayAt("SNOOZE    ", 4, 2);              //Debugging Display
+        if(timePresses==1)
+        {
+            now.hour--;
+            if(now.hour<1)                                //hour Rolls Over
+            {
+                now.hour=12;
+                toggleAMPM();
+                displayAMPM();
+            }
+
+            displayHour();
+        }
+        else if(timePresses==2)                         //incoment Minutes
+        {
+            now.min--;
+            if(now.min>59)
+                now.min=59;                                  //Minutes reset
+            displayMin();
+        }
+
         P4->IFG &= ~SNOOZE;
     }
 }
