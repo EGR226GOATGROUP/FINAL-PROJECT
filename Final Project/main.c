@@ -1,51 +1,24 @@
-/*                  Pin Reference
- * LCD
- * 7.2 -> E
- * 7.4 -> DB4
- * 7.5 -> DB5
- * 7.6 -> DB6
- * 7.7 -> DB7
- *
- * Buttons
- * 4.0 -> TimeSet
- * 4.1 -> incroment
- * 4.2 -> AlarmSet
- * 4.3 -> Snozze/Down
- */
-
-//Hey Did this work
-
 #include "msp.h"
 #include <stdio.h>
 #include <string.h>
 
 
 void configRTC(int hour, int min);
+
+
+void displayText(char text[], int lineNum);
+void displayAt(char text[], int place, int line);
 void LCD_init(void);
 void commandWrite(uint8_t command);
+void dataWrite(uint8_t data);
 void pushByte(uint8_t byte);
 void pushNibble(uint8_t nibble);
 void pulseEnablePin(void);
 void sysTickDelay_ms(int ms);
 void sysTickDelay_us(int microsec);
-void dataWrite(uint8_t data);
-void displayText(char text[], int lineNum);
-void SysTick_Init(void);
-void intButt();
-
-enum states{
-    MENU,
-    SETALARM,
-    SETTIME
-};
-
-enum settime{
-    HOUR,
-    MIN,
-    SEC
-};
-
-
+void SysTick_Init();
+int hour=0,min=0,sec=0,RTC_flag=0;
+char time[17],time1[17] = {'2','r'};
 
 // global struct variable called now
 struct
@@ -55,128 +28,71 @@ struct
     uint8_t hour;
 } now;
 
-int RTC_flag = 0, RTC_alarm = 0, setTimeFlag = 0,incFlag = 0;
-
-
 
 
 void main(void)
 {
     WDT_A->CTL = WDT_A_CTL_PW | WDT_A_CTL_HOLD;     // stop watchdog timer
-    __disable_irq();
-    intButt();
-    configRTC(12,0);
     __enable_interrupt();
     SysTick_Init(); //initializes timer
     LCD_init(); //initializes LCD
-    char time[17];
-    enum states state = MENU;
-    int hour = 12,min = 0;
-    int setTimeCount = 0;
-
+    configRTC(12, 30);
+    commandWrite(0x01);
     while(1)
     {
-        if(setTimeFlag)
-        {
-            setTimeFlag = 0;
-            //sysTickDelay_us(500);
-            state = SETTIME;
-            setTimeCount++;
-            if(setTimeCount == 2)
-            {
-                setTimeCount = 0;
-                state = MENU;
-            }
-        }
-
-        switch(state)
-        {
-        case MENU:
-            if(RTC_flag)
-            {
-                if(now.hour<10)
-                {
-                    commandWrite(0x01);
-                    sprintf(time,"     %d:%.2d:%.2d       ", now.hour,now.min,now.sec);
-                    displayText(time,1);
-                    RTC_flag = 0;
-                }
-                else if(now.hour>10)
-                {
-                    commandWrite(0x01);
-                    sprintf(time,"    %d:%.2d:%.2d       ", now.hour,now.min,now.sec);
-                    displayText(time,1);
-                    RTC_flag = 0;
-                }
-
-            }
-            break;
-        case SETTIME:
-
-           if(RTC_flag)
-            {
-               if(hour < 10)
-               {
-                   commandWrite(0x01);
-                   sprintf(time,"     %d:%.2d:%.2d       ", now.hour,now.min,0);
-                   displayText(time,1);
-                   sysTickDelay_ms(500);
-                   commandWrite(0x01);
-                   sprintf(time,"      :%.2d:%.2d       ", now.min,0);
-                   displayText(time,1);
-                   RTC_flag = 0;
-               }
-               else if(hour >= 10)
-               {
-                   commandWrite(0x01);
-                   sprintf(time,"    %d:%.2d:%.2d       ", now.hour,now.min,0);
-                   displayText(time,1);
-                   sysTickDelay_ms(500);
-                   commandWrite(0x01);
-                   sprintf(time,"      :%.2d:%.2d       ", now.min,0);
-                   displayText(time,1);
-                   RTC_flag = 0;
-               }
-
-            }
-           if(setTimeCount == 1)
-           {
-               if(incFlag)
-               {
-                   hour++;
-                   if(hour > 12)
-                   {
-                       hour = 1;
-                   }
-                   sysTickDelay_us(50);
-                   configRTC(hour,0);
-                   incFlag = 0;
-               }
-           }
-//           else if(setTimeCount == 2)
-//           {
-//               if(incFlag)
-//               {
-//                   min++;
-//                   if(min > 59)
-//                   {
-//                       min = 0;
-//                   }
-//                   sysTickDelay_us(50);
-//                   configRTC(hour,min);
-//                   incFlag = 0;
-//               }
-//           }
-
-
-            break;
-            case SETALARM:
-            break;
-        }
-
 
     }
+
 }
+
+
+
+void displayAt(char text[], int place, int lineNum)
+{
+    int i;
+    if(lineNum == 1)
+    {
+            commandWrite(place+128);
+            for(i=0; i<strlen(text);i++)
+            {
+                dataWrite(text[i]);
+            }
+    }
+    else if(lineNum == 2)
+    {
+            commandWrite(place+192);
+            for(i=0; i<strlen(text);i++)
+            {
+                dataWrite(text[i]);
+            }
+    }
+    else if(lineNum == 3)
+    {
+            commandWrite(place+144);
+            for(i=0; i<strlen(text);i++)
+            {
+                dataWrite(text[i]);
+            }
+    }
+    else if(lineNum == 4)
+    {
+            commandWrite(place+208);
+            for(i=0; i<strlen(text);i++)
+            {
+                dataWrite(text[i]);
+            }
+    }
+}
+
+
+
+
+
+
+
+
+
+
 
 void configRTC(int hour, int min)
 {
@@ -198,60 +114,37 @@ void configRTC(int hour, int min)
 
 void RTC_C_IRQHandler(void)
 {
-    if(RTC_C->CTL0 & BIT1) {
-        RTC_alarm = 1;
-        RTC_C->CTL0 = 0xA500;
-    }
     if(RTC_C->PS1CTL & BIT0) {
         now.sec         =   RTC_C->TIM0>>0 & 0x00FF;
         now.min         =   RTC_C->TIM0>>8 & 0x00FF;
         now.hour        =   RTC_C->TIM1>>0 & 0x00FF;
         RTC_flag = 1;
         RTC_C->PS1CTL &= ~BIT0;
+        sprintf(time,"%.2d",now.hour);
+        displayAt(time,4,1);
+        commandWrite(134);
+        dataWrite(0b00111010);
+        sprintf(time,"%.2d",now.min);
+        displayAt(time,7,1);
+        commandWrite(137);
+        dataWrite(0b00111010);
+        sprintf(time,"%.2d",now.sec);
+        displayAt(time,10,1);
     }
 
 }
 
 
 
-void intButt(void)
-{
-    P1->SEL0 &= ~BIT0;
-    P1->SEL1 &= ~BIT0;
-    P1->DIR  |=  BIT0;
-    P1->OUT &= ~BIT0;
-    //4.0-4.3 for buttons
 
-   P4->SEL0 &= ~(BIT0|BIT1|BIT2|BIT3);
-   P4->SEL1 &= ~(BIT0|BIT1|BIT2|BIT3);
-   P4->DIR  &= ~(BIT0|BIT1|BIT2|BIT3);
-   P4->REN  |=  (BIT0|BIT1|BIT2|BIT3);
-   P4->OUT  |=  (BIT0|BIT1|BIT2|BIT3);
-   P4->IE   |=  (BIT0|BIT1|BIT2|BIT3);
-   //P4->IES  |=  (BIT0|BIT1|BIT2|BIT3);
 
-  NVIC_EnableIRQ(PORT4_IRQn);
 
-}
 
-void PORT4_IRQHandler()
-{
 
-   if(P4->IFG & BIT0)
-    {
-        P4->IFG &= ~(BIT0);
-        setTimeFlag = 1;
-    }
 
-   if(P4->IFG & BIT1)
-   {
-       P4->IFG &= ~(BIT1);
-       incFlag = 1;
-   }
 
-}
 
-//--------------------------------------------------------------------------------------------
+
 
 void displayText(char text[], int lineNum) //function to display text on a given line
 {
@@ -330,27 +223,30 @@ void LCD_init(void) //initializes LCD
     commandWrite(0x06); //increment cursor
     sysTickDelay_ms(10);
 
+    commandWrite(0x0C); //2 lines
+    sysTickDelay_us(100);
+
 }
 
 void commandWrite(uint8_t command) //writes a command to LCD using RS = 0
 {
     P7->OUT &= ~BIT0; //rs=0
-    sysTickDelay_ms(2);
+    sysTickDelay_ms(5);
     P7->OUT &= ~0xF0; //clears data pins
-    sysTickDelay_us(5);
+    sysTickDelay_us(10);
     pushByte(command);
-    sysTickDelay_us(5);
+    sysTickDelay_us(10);
 
 }
 
 void dataWrite(uint8_t data) //writes data to LCD using RS = 1
 {
     P7->OUT |= BIT0; //rs=1
-    sysTickDelay_ms(2);
+    sysTickDelay_ms(5);
     P7->OUT &= ~0xF0; //clears data pins
-    sysTickDelay_us(5);
+    sysTickDelay_us(10);
     pushByte(data);
-    sysTickDelay_us(5);
+    sysTickDelay_us(10);
 }
 
 void pushByte(uint8_t byte) //stores 4 bits into variable and sends nibble to push nibble twice for each half of the byte
@@ -363,23 +259,24 @@ void pushByte(uint8_t byte) //stores 4 bits into variable and sends nibble to pu
 void pushNibble(uint8_t nibble) //sets nibble up in data pins for pulse
 {
     P7->OUT &= ~0xF0; //clearing data pins
-    sysTickDelay_us(10);
+    sysTickDelay_ms(5);
     P7->OUT |= (nibble & 0xF0); //sends a nibble through pins 4-7
-    sysTickDelay_us(5);
+    sysTickDelay_us(10);
     pulseEnablePin();
 }
 
 void pulseEnablePin(void) //sends data to LCD by pulsing enable pin on and off
 {
     P7->OUT &= ~BIT2; //enable low
-    sysTickDelay_us(5);
+    sysTickDelay_us(10);
     P7->OUT |= BIT2; //enable high
-    sysTickDelay_us(5);
+    sysTickDelay_us(10);
     P7->OUT &= ~BIT2; //enable low
     sysTickDelay_us(10);
 
 
 }
+
 
 void SysTick_Init(void) //initializes systick timer
 {
@@ -403,4 +300,7 @@ void sysTickDelay_us(int microsec) //timer microseconds
     SysTick->VAL = 0;
     while((SysTick->CTRL & BIT(16))==0);
 }
+
+
+
 
