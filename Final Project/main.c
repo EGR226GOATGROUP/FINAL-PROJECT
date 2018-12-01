@@ -24,9 +24,13 @@
 #include <string.h>
 
 #define ADC_CONVERSION_RATE 1500000
+#define CLEAR 0x01
+
 void configRTC(int hour, int min);
 void ADC14init(void);
 void tempT32interrupt(void);
+void intButtons();
+
 
 void displayText(char text[], int lineNum);
 void displayAt(char text[], int place, int line);
@@ -39,6 +43,7 @@ void pulseEnablePin(void);
 void sysTickDelay_ms(int ms);
 void sysTickDelay_us(int microsec);
 void SysTick_Init();
+
 int hour=0,min=0,sec=0,RTC_flag=0;
 float temp=0, voltage = 0, raw = 0;
 char time[2],tempAr[3];
@@ -51,18 +56,20 @@ struct
     uint8_t hour;
 } now;
 
-
+//-----------------------------------------MAIN----------------------------------------------------
 
 void main(void)
 {
     WDT_A->CTL = WDT_A_CTL_PW | WDT_A_CTL_HOLD;     // stop watchdog timer
     __enable_interrupt();
-    SysTick_Init(); //initializes timer
+    SysTick_Init();                                 //initializes timer
     tempT32interrupt();
-    LCD_init(); //initializes LCD
+    LCD_init();                                     //initializes LCD
     ADC14init();
+    intButtons();
+
     configRTC(12, 30);
-    commandWrite(0x01);
+    commandWrite(CLEAR);
     while(1)
     {
 
@@ -70,56 +77,39 @@ void main(void)
 
 }
 
-void displayAt(char text[], int place, int lineNum)
+
+
+//--------------------------------------------------Interrupts------------------------------------------------------------------------
+
+void T32_INT1_IRQHandler()                          //Interrupt Handler for Timer 2
 {
-    int i;
-    if(lineNum == 1)
-    {
-            commandWrite(place+128);
-            for(i=0; i<strlen(text);i++)
-            {
-                dataWrite(text[i]);
-            }
-    }
-    else if(lineNum == 2)
-    {
-            commandWrite(place+192);
-            for(i=0; i<strlen(text);i++)
-            {
-                dataWrite(text[i]);
-            }
-    }
-    else if(lineNum == 3)
-    {
-            commandWrite(place+144);
-            for(i=0; i<strlen(text);i++)
-            {
-                dataWrite(text[i]);
-            }
-    }
-    else if(lineNum == 4)
-    {
-            commandWrite(place+208);
-            for(i=0; i<strlen(text);i++)
-            {
-                dataWrite(text[i]);
-            }
-    }
+    TIMER32_1->INTCLR = 1;                          //Clear interrupt flag so it does not interrupt again immediately.
+    ADC14->CTL0         |=  0b1;              //Start ADC Conversion
+
 }
 
-void configRTC(int hour, int min)
+void PORT4_IRQHandler()
 {
-    RTC_C->CTL0     =   0xA500;     //Write Code, IE on RTC Ready
-    RTC_C->CTL13    =   0x0000;
-    RTC_C->TIM0     = min<<8 | 00;
-    RTC_C->TIM1     = hour;
-
-    RTC_C->PS1CTL   = 0b11010;
-
-    RTC_C->AMINHR   = 12<<8 | 31 | BIT(15) | BIT(7);
-
-    RTC_C->CTL0     = ((0xA500) | BIT5);
-    NVIC_EnableIRQ(RTC_C_IRQn);
+    if(P4->IFG & BIT0)
+    {
+        displayAt("Button1", 4, 2);
+        P4->IFG &= ~BIT0;
+    }
+    if(P4->IFG & BIT1)
+    {
+        displayAt("Button2", 4, 2);
+        P4->IFG &= ~BIT1;
+    }
+    if(P4->IFG & BIT2)
+    {
+        displayAt("Button3", 4, 2);
+        P4->IFG &= ~BIT2;
+    }
+    if(P4->IFG & BIT3)
+    {
+        displayAt("Button4", 4, 2);
+        P4->IFG &= ~BIT3;
+    }
 }
 
 void RTC_C_IRQHandler(void)
@@ -164,6 +154,34 @@ void ADC14_IRQHandler(void)
     ADC14->CLRIFGR1     &=    ~0b1111110;                 // Clear all IFGR1 Interrupts (Bits 6-1.  These could trigger an interrupt and we are checking them for now.)
 }
 
+//------------------------------------------------------------Initilizations-----------------------------------------------------------------------
+void intButtons()
+{
+    P4->SEL0 &= ~(BIT0|BIT1|BIT2|BIT3);
+    P4->SEL1 &= ~(BIT0|BIT1|BIT2|BIT3);
+    P4->DIR  &= ~(BIT0|BIT1|BIT2|BIT3);
+    P4->REN  |=  (BIT0|BIT1|BIT2|BIT3);
+    P4->OUT  |=  (BIT0|BIT1|BIT2|BIT3);
+    P4->IE   |=  (BIT0|BIT1|BIT2|BIT3);
+    P4->IES  |=  (BIT0|BIT1|BIT2|BIT3);
+
+    NVIC_EnableIRQ(PORT4_IRQn);
+}
+
+void configRTC(int hour, int min)
+{
+    RTC_C->CTL0     =   0xA500;     //Write Code, IE on RTC Ready
+    RTC_C->CTL13    =   0x0000;
+    RTC_C->TIM0     = min<<8 | 00;
+    RTC_C->TIM1     = hour;
+
+    RTC_C->PS1CTL   = 0b11010;
+
+    RTC_C->AMINHR   = 12<<8 | 31 | BIT(15) | BIT(7);
+
+    RTC_C->CTL0     = ((0xA500) | BIT5);
+    NVIC_EnableIRQ(RTC_C_IRQn);
+}
 
 void ADC14init(void)
 {
@@ -202,12 +220,43 @@ void tempT32interrupt(void)
     NVIC_EnableIRQ(T32_INT1_IRQn);
 }
 
+//---------------------------------------------------------------------------LCD Displaying functions----------------------------------------------
 
-void T32_INT1_IRQHandler()                          //Interrupt Handler for Timer 2
+void displayAt(char text[], int place, int lineNum)
 {
-    TIMER32_1->INTCLR = 1;                          //Clear interrupt flag so it does not interrupt again immediately.
-    ADC14->CTL0         |=  0b1;              //Start ADC Conversion
-
+    int i;
+    if(lineNum == 1)
+    {
+            commandWrite(place+128);
+            for(i=0; i<strlen(text);i++)
+            {
+                dataWrite(text[i]);
+            }
+    }
+    else if(lineNum == 2)
+    {
+            commandWrite(place+192);
+            for(i=0; i<strlen(text);i++)
+            {
+                dataWrite(text[i]);
+            }
+    }
+    else if(lineNum == 3)
+    {
+            commandWrite(place+144);
+            for(i=0; i<strlen(text);i++)
+            {
+                dataWrite(text[i]);
+            }
+    }
+    else if(lineNum == 4)
+    {
+            commandWrite(place+208);
+            for(i=0; i<strlen(text);i++)
+            {
+                dataWrite(text[i]);
+            }
+    }
 }
 
 void displayText(char text[], int lineNum) //function to display text on a given line
@@ -246,6 +295,8 @@ void displayText(char text[], int lineNum) //function to display text on a given
         }
 }
 
+//----------------------------------------------------------LCD Back end----------------------------------------------------------------------------
+
 void LCD_init(void) //initializes LCD
 {
     P7->SEL0 &= ~0xFF; //port 4 GPIO
@@ -270,7 +321,7 @@ void LCD_init(void) //initializes LCD
     sysTickDelay_us(100);
     commandWrite(0x0F); //display on cursor on and blinking
     sysTickDelay_us(100);
-    commandWrite(0x01); //clear display and move cursor home
+    commandWrite(CLEAR); //clear display and move cursor home
     sysTickDelay_us(100);
     commandWrite(0x06); //increment cursor
     sysTickDelay_ms(10);
