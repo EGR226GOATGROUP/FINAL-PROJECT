@@ -23,7 +23,13 @@
 /*
  * Process for Sending updates
  *
- * Copy from local ->
+ * Copy from local -> main.c (Git Repositorie)
+ * Save the main.c (Git Repositorie)
+ * Commit and Push
+ * If there is error -> Pull
+ * Save the main.c (Git Repositorie)
+ * Make change to save again
+ * Commit and Push again
  */
 
 
