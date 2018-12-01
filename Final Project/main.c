@@ -32,7 +32,6 @@
  * Commit and Push again
  */
 
-//
 
 #include "msp.h"
 #include <stdio.h>
@@ -113,11 +112,11 @@ void PORT4_IRQHandler()
     //SetTime Button Press
     if(P4->IFG & SETTIME)
     {
-displayAt("SETTIME    ", 4, 2);             //Debugging Display
         if(timePresses==0)                                  //First press -> Go into time Hours edit
         {
             RTC_C->PS1CTL   = 0b00000;                      //disable timer clock
-
+            displayAt("00:00:00  AM",2,1);                  //Starts at 00;00;00 AM
+            AMPM=0;                                         //AMPM -> starts at AM
         }
         else if(timePresses==2)                             //Third press -> Save time
         {
@@ -135,8 +134,21 @@ displayAt("SETTIME    ", 4, 2);             //Debugging Display
         if(timePresses==1)                              //Incoment Hours
         {
             now.hour = now.hour+1;
-            if(now.hour>12)                                 //hour Rolls Over
+            if(now.hour>12)                                //hour Rolls Over
+            {
                 now.hour=1;
+            }
+
+            if(now.hour<10)
+            {
+                sprintf(time," %d",now.hour);
+                displayAt(time,2,1);
+            }
+            else
+            {
+                sprintf(time,"%.2d",now.hour);
+                displayAt(time,2,1);
+            }
         }
         else if(timePresses==2)                         //incoment Minutes
         {
