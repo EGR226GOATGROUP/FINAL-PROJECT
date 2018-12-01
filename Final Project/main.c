@@ -58,6 +58,10 @@ void ADC14init(void);
 void tempT32interrupt(void);
 void intButtons();
 
+void displayAMPM();
+void toggleAMPM();
+void displayHour();
+
 
 void displayText(char text[], int lineNum);
 void displayAt(char text[], int place, int line);
@@ -126,6 +130,51 @@ void wakeUpLights(void)
 {
     TIMER32_2->CONTROL |= BIT7;
 }
+
+void toggleAMPM()                                   //Toggle AMPM when hours roll over
+{
+    if(AMPM)
+        AMPM=0;
+    else
+        AMPM=1;
+}
+
+void displayAMPM()
+{
+    if(AMPM)                                        //prints AM or PM based on flag variable
+    {
+        sprintf(time,"PM");
+        displayAt(time,12,1);
+    }
+    else if(!AMPM)
+    {
+        sprintf(time,"AM");
+        displayAt(time,12,1);
+    }
+}
+
+void displayMin()                                   //Displays the minutes
+{
+    sprintf(time,"%.2d",now.min);
+    displayAt(time,5,1);
+}
+
+void displayHour()                                  //Displays the hour with the correct number of leading zeros
+{
+    if(now.hour<10)
+    {
+        sprintf(time," %d",now.hour);
+        displayAt(time,2,1);
+    }
+    else
+    {
+        sprintf(time,"%.2d",now.hour);
+        displayAt(time,2,1);
+    }
+}
+
+
+
 //--------------------------------------------------Interrupts------------------------------------------------------------------------
 
 void T32_INT1_IRQHandler()                          //Interrupt Handler for Timer 2
@@ -155,11 +204,14 @@ void PORT4_IRQHandler()
     //SetTime Button Press
     if(P4->IFG & SETTIME)
     {
-displayAt("SETTIME    ", 4, 2);             //Debugging Display
         if(timePresses==0)                                  //First press -> Go into time Hours edit
         {
             RTC_C->PS1CTL   = 0b00000;                      //disable timer clock
 
+            displayAt("00:00:00  AM",2,1);                  //Starts at 00;00;00 AM
+            now.hour=0;
+            now.min=0;
+            AMPM=0;
         }
         else if(timePresses==2)                             //Third press -> Save time
         {
@@ -176,26 +228,30 @@ displayAt("SETTIME    ", 4, 2);             //Debugging Display
     {
         if(timePresses==1)                              //Incoment Hours
         {
-            now.hour = now.hour+1;
-            if(now.hour>12)                                 //hour Rolls Over
+            now.hour++;
+            if(now.hour>12)                                //hour Rolls Over
+            {
                 now.hour=1;
+                toggleAMPM();
+                displayAMPM();
+            }
+
+            displayHour();
         }
         else if(timePresses==2)                         //incoment Minutes
         {
-            now.min++;;
+            now.min++;
             if(now.min>59)
-                now.min=0;                                  //Minutes roll over
+                now.min=0;                                  //Minutes reset
+            displayMin();
         }
 
-        displayAt("ALARM    ", 4, 2);               //Debugging Display
         P4->IFG &= ~(ALARM|UP);
     }
 
     //SetAlarm Button Press
     if(P4->IFG & SETALARM)                              //SetAlarm Button Press
     {
-        displayAt("SETALARM   ", 4, 2);             //Debugging Display
-
 
         alarmPresses++;
         P4->IFG &= ~SETALARM;
@@ -204,7 +260,26 @@ displayAt("SETTIME    ", 4, 2);             //Debugging Display
     //Snooze/Down Button Press
     if(P4->IFG & SNOOZE)
     {
-        displayAt("SNOOZE    ", 4, 2);              //Debugging Display
+        if(timePresses==1)
+        {
+            now.hour--;
+            if(now.hour<1)                                //hour Rolls Over
+            {
+                now.hour=12;
+                toggleAMPM();
+                displayAMPM();
+            }
+
+            displayHour();
+        }
+        else if(timePresses==2)                         //incoment Minutes
+        {
+            now.min--;
+            if(now.min>59)
+                now.min=59;                                  //Minutes reset
+            displayMin();
+        }
+
         P4->IFG &= ~SNOOZE;
     }
 }
@@ -223,47 +298,22 @@ void RTC_C_IRQHandler(void)
 
         if((now.hour == 12) & (now.min == 0) & (now.sec == 0)) //toggles AM and PM flag for each roll over will be used more with UART to convert 24 hr to 12 hr
         {
-            if(AMPM)
-            {
-                AMPM = 0;
-            }
-            else
-            {
-                AMPM = 1;
-            }
+            toggleAMPM();
         }
 
         RTC_flag = 1;
         RTC_C->PS1CTL &= ~BIT0;
-        if(now.hour<10)
-        {
-            sprintf(time," %d",now.hour);
-            displayAt(time,2,1);
-        }
-        else
-        {
-            sprintf(time,"%.2d",now.hour);
-            displayAt(time,2,1);
-        }
+        displayHour();
 
         commandWrite(132);
         dataWrite(0b00111010);
-        sprintf(time,"%.2d",now.min);
-        displayAt(time,5,1);
+        displayMin();
         commandWrite(135);
         dataWrite(0b00111010);
         sprintf(time,"%.2d",now.sec);
         displayAt(time,8,1);
-        if(AMPM) //prints AM or PM based on flag variable
-        {
-            sprintf(time,"PM");
-            displayAt(time,12,1);
-        }
-        else if(!AMPM)
-        {
-            sprintf(time,"AM");
-            displayAt(time,12,1);
-        }
+
+        displayAMPM();
 
     }
 }
