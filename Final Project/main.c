@@ -26,11 +26,9 @@
 #define ADC_CONVERSION_RATE 1500000
 #define CLEAR 0x01
 #define SETTIME BIT0
-#define ALARM BIT1
-#define UP BIT1
-#define SETALARM BIT2
+#define ALARM BIT2
+#define SETALARM BIT1
 #define SNOOZE BIT3
-#define DOWN BIT3
 
 void configRTC(int hour, int min);
 void ADC14init(void);
@@ -50,7 +48,7 @@ void sysTickDelay_ms(int ms);
 void sysTickDelay_us(int microsec);
 void SysTick_Init();
 
-int timePresses=0, alarmPresses=0;
+int setTime=0, setAlarm=0;
 int hour=0,min=0,sec=0,RTC_flag=0;
 float temp=0, voltage = 0, raw = 0;
 char time[2],tempAr[3];
@@ -94,56 +92,32 @@ void T32_INT1_IRQHandler()                          //Interrupt Handler for Time
 
 void PORT4_IRQHandler()
 {
-    //SetTime Button Press
-    if(P4->IFG & SETTIME)
+    if(P4->IFG & SETTIME)                               //SetTime Button Press
     {
         displayAt("SETTIME    ", 4, 2);             //Debugging Display
 
-        if(timePresses==0)                                  //First press -> Go into time Hours edit
+        if(setTime==0)                                  //First press
         {
-            //disable timer clock
-        }
-        else if(timePresses==3)                             //Third press -> Save time
-        {
-            //enable timer clock
-            //save new time
+
         }
 
-        timePresses++;
+        setTime++;
         P4->IFG &= ~SETTIME;
     }
-
-    //Alarm toggle/Up Button Press
-    if(P4->IFG & (ALARM|UP))
+    if(P4->IFG & ALARM)                                 //Alarm toggle/Up Button Press
     {
-        if(timePresses==1)                              //Incoment Hours
-        {
-            hour++;
-            if(hour>12)                                 //hour Rolls Over
-                hour=1;
-        }
-        else if(timePresses==2)                         //incoment Minutes
-        {
-            if(min>59)
-                min=0;                                  //Minutes roll over
-        }
-
         displayAt("ALARM    ", 4, 2);               //Debugging Display
-        P4->IFG &= ~(ALARM|UP);
+        P4->IFG &= ~ALARM;
     }
-
-    //SetAlarm Button Press
     if(P4->IFG & SETALARM)                              //SetAlarm Button Press
     {
         displayAt("SETALARM   ", 4, 2);             //Debugging Display
 
 
-        alarmPresses++;
+        setAlarm++;
         P4->IFG &= ~SETALARM;
     }
-
-    //Snooze/Down Button Press
-    if(P4->IFG & SNOOZE)
+    if(P4->IFG & SNOOZE)                                //Snooze/Down Button Press
     {
         displayAt("SNOOZE    ", 4, 2);              //Debugging Display
         P4->IFG &= ~SNOOZE;
