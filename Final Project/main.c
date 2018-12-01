@@ -18,6 +18,11 @@
  * 7.6 -> DB6
  * 7.7 -> DB7
  *
+ * WAKE UP LIGHTS
+ * P2.4 -> RED     TIMERA0.1
+ * P2.5 -> GREEN   TIMERA0.2
+ * P2.6 -> BLUE    TIMERA0.3
+ *
  */
 
 /*
@@ -64,12 +69,15 @@ void pulseEnablePin(void);
 void sysTickDelay_ms(int ms);
 void sysTickDelay_us(int microsec);
 void SysTick_Init();
+void LED_init(void);
+void wakeUpLights(void);
 
 int timePresses=0, alarmPresses=0;
 float temp=0, voltage = 0, raw = 0;
 char time[2],tempAr[3];
 int RTC_flag =0;
 int AMPM = 1; //flag to determine AM or PM will be used more for UART functionality to convert 24 hr to 12 hr time
+int lightsOn = 0; //flag to be used to check if the wake up lights should be turned on
 
 // global struct variable called now
 struct
@@ -89,16 +97,27 @@ void main(void)
     tempT32interrupt();
     LCD_init();                                     //initializes LCD
     ADC14init();
+    LED_init();
     __enable_interrupt();
 
     configRTC(12, 30);
     commandWrite(CLEAR);
     while(1)
     {
-
+        while(lightsOn)
+        {
+            wakeUpLights();
+        }
     }
 }
 
+//--------------------------------------------------Non-Interrupt Functions-----------------------------------------------------------
+
+void wakeUpLights(void)
+{
+   int i = 0;
+   for(i; i<60000; i++);
+}
 //--------------------------------------------------Interrupts------------------------------------------------------------------------
 
 void T32_INT1_IRQHandler()                          //Interrupt Handler for Timer 2
@@ -313,6 +332,19 @@ void tempT32interrupt(void)
     NVIC_EnableIRQ(T32_INT1_IRQn);
 }
 
+void LED_init(void)
+{
+    P2->SEL0 |=  (BIT0|BIT1|BIT2);
+    P2->SEL1 &= ~(BIT0|BIT1|BIT2);
+    P2->DIR |=   (BIT0|BIT1|BIT2);
+
+    TIMER_A0->CCR[0] = 60000-1;
+    TIMER_A0->CCTL[1] = 0b11100000;
+    TIMER_A0->CCTL[2] = 0b11100000;
+    TIMER_A0->CCTL[3] = 0b11100000;
+    TIMER_A0->CTL = 0b1000010100;
+}
+
 //---------------------------------------------------------------------------LCD Displaying functions----------------------------------------------
 
 void displayAt(char text[], int place, int lineNum)
@@ -491,6 +523,7 @@ void sysTickDelay_us(int microsec) //timer microseconds
     SysTick->VAL = 0;
     while((SysTick->CTRL & BIT(16))==0);
 }
+
 
 
 
