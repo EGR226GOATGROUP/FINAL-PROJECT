@@ -8,7 +8,7 @@
  * 4.0 -> SetTime
  * 4.1 -> On/Off/Up
  * 4.2 -> AlarmSet
- * 4.3 -> Snozze/Down
+ * 4.3 -> Snooze/Down
  *
  * LCD
  * 7.0 -> RS
@@ -35,6 +35,7 @@
  * Save the main.c (Git Repository)
  * Make change to save again
  * Commit and Push again
+ *
  */
 
 //dd
@@ -75,6 +76,7 @@ void sysTickDelay_us(int microsec);
 void SysTick_Init();
 void LED_init(void);
 void wakeUpLights(void);
+void LEDT32interrupt(void);
 
 int timePresses=0, alarmPresses=0;
 float temp=0, voltage = 0, raw = 0;
@@ -82,7 +84,7 @@ char time[2],tempAr[3];
 int RTC_flag =0;
 int AMPM = 1; //flag to determine AM or PM will be used more for UART functionality to convert 24 hr to 12 hr time
 int lightsOn = 0; //flag to be used to check if the wake up lights should be turned on
-
+int lightBrightness = 0;
 // global struct variable called now
 struct
 {
@@ -99,6 +101,7 @@ void main(void)
     intButtons();
     SysTick_Init();                                 //initializes timer
     tempT32interrupt();
+    LEDT32interrupt();
     LCD_init();                                     //initializes LCD
     ADC14init();
     LED_init();
@@ -106,6 +109,11 @@ void main(void)
 
     configRTC(12, 30);
     commandWrite(CLEAR);
+    lightsOn = 1;
+
+    P1->SEL0 &= ~BIT0;
+    P1->SEL1 &= ~BIT0;
+    P1->DIR |= BIT0;
     while(1)
     {
         while(lightsOn)
@@ -113,14 +121,14 @@ void main(void)
             wakeUpLights();
         }
     }
+
 }
 
 //--------------------------------------------------Non-Interrupt Functions-----------------------------------------------------------
 
 void wakeUpLights(void)
 {
-   int i = 0;
-   for(i; i<60000; i++);
+    TIMER32_2->CONTROL |= BIT7;
 }
 
 void toggleAMPM()                                   //Toggle AMPM when hours roll over
@@ -173,6 +181,22 @@ void T32_INT1_IRQHandler()                          //Interrupt Handler for Time
 {
     TIMER32_1->INTCLR = 1;                          //Clear interrupt flag so it does not interrupt again immediately.
     ADC14->CTL0         |=  0b1;                    //Start ADC Conversion
+
+}
+void T32_INT2_IRQHandler()                          //Interrupt Handler for Timer 2
+{
+    TIMER32_2->INTCLR = 1;                          //Clear interrupt flag so it does not interrupt again immediately.
+    lightBrightness+= 10;                           //increase brightness by 1% every interrupt (3 seconds when enabled)
+    P1->OUT ^= BIT0;
+    TIMER_A0->CCR[1] = lightBrightness;
+    sprintf(time,"%.2d",lightBrightness);
+    if(lightBrightness == 1000)
+    {
+        TIMER_A0->CCR[1] = 0;
+        TIMER32_2->CONTROL &= ~BIT7;
+        lightsOn = 0;
+    }
+
 
 }
 
@@ -382,16 +406,21 @@ void tempT32interrupt(void)
     NVIC_EnableIRQ(T32_INT1_IRQn);
 }
 
+void LEDT32interrupt(void)
+{
+    TIMER32_2->LOAD       =   175781;        //Set interval for interrupt to occur at
+    TIMER32_2->CONTROL       =  0b01101000; //use bit 7 to enable in wake up lights, interrupt enabled, divide by 256, 16 bit mode, wrapping mode
+    NVIC_EnableIRQ(T32_INT2_IRQn);
+}
+
 void LED_init(void)
 {
-    P2->SEL0 |=  (BIT0|BIT1|BIT2);
-    P2->SEL1 &= ~(BIT0|BIT1|BIT2);
-    P2->DIR |=   (BIT0|BIT1|BIT2);
+    P2->SEL0 |=  BIT4;
+    P2->SEL1 &= ~BIT4;
+    P2->DIR |=   BIT4;
 
-    TIMER_A0->CCR[0] = 60000-1;
+    TIMER_A0->CCR[0] = 1000-1;
     TIMER_A0->CCTL[1] = 0b11100000;
-    TIMER_A0->CCTL[2] = 0b11100000;
-    TIMER_A0->CCTL[3] = 0b11100000;
     TIMER_A0->CTL = 0b1000010100;
 }
 
