@@ -19,6 +19,9 @@
  * 7.7 -> DB7
  *
  */
+
+//Nolan Comment
+
 #include "msp.h"
 #include <stdio.h>
 #include <string.h>
@@ -26,9 +29,11 @@
 #define ADC_CONVERSION_RATE 1500000
 #define CLEAR 0x01
 #define SETTIME BIT0
-#define ALARM BIT2
-#define SETALARM BIT1
+#define ALARM BIT1
+#define UP BIT1
+#define SETALARM BIT2
 #define SNOOZE BIT3
+#define DOWN BIT3
 
 void configRTC(int hour, int min);
 void ADC14init(void);
@@ -48,11 +53,10 @@ void sysTickDelay_ms(int ms);
 void sysTickDelay_us(int microsec);
 void SysTick_Init();
 
-int setTime=0, setAlarm=0;
-int hour=0,min=0,sec=0,RTC_flag=0;
+int timePresses=0, alarmPresses=0;
 float temp=0, voltage = 0, raw = 0;
 char time[2],tempAr[3];
-int AMPM = 1; //flag to determine AM or PM will be used more for UART functionality to convert 24 hr to 12 hr time
+int RTC_flag =0;
 
 // global struct variable called now
 struct
@@ -73,7 +77,8 @@ void main(void)
     LCD_init();                                     //initializes LCD
     ADC14init();
     __enable_interrupt();
-    configRTC(12, 59);
+
+    configRTC(12, 30);
     commandWrite(CLEAR);
     while(1)
     {
@@ -92,32 +97,57 @@ void T32_INT1_IRQHandler()                          //Interrupt Handler for Time
 
 void PORT4_IRQHandler()
 {
-    if(P4->IFG & SETTIME)                               //SetTime Button Press
+    //SetTime Button Press
+    if(P4->IFG & SETTIME)
     {
         displayAt("SETTIME    ", 4, 2);             //Debugging Display
 
-        if(setTime==0)                                  //First press
+        if(timePresses==0)                                  //First press -> Go into time Hours edit
         {
-
+            //disable timer clock
+        }
+        else if(timePresses==3)                             //Third press -> Save time
+        {
+            //enable timer clock
+            //save new time
         }
 
-        setTime++;
+        timePresses++;
         P4->IFG &= ~SETTIME;
     }
-    if(P4->IFG & ALARM)                                 //Alarm toggle/Up Button Press
+
+    //Alarm toggle/Up Button Press
+    if(P4->IFG & (ALARM|UP))
     {
+        if(timePresses==1)                              //Incoment Hours
+        {
+            now.hour++;
+            if(now.hour>12)                                 //hour Rolls Over
+                now.hour=1;
+        }
+        else if(timePresses==2)                         //incoment Minutes
+        {
+            now.min++;
+            if(now.min>59)
+                now.min=0;                                  //Minutes roll over
+        }
+
         displayAt("ALARM    ", 4, 2);               //Debugging Display
-        P4->IFG &= ~ALARM;
+        P4->IFG &= ~(ALARM|UP);
     }
+
+    //SetAlarm Button Press
     if(P4->IFG & SETALARM)                              //SetAlarm Button Press
     {
         displayAt("SETALARM   ", 4, 2);             //Debugging Display
 
 
-        setAlarm++;
+        alarmPresses++;
         P4->IFG &= ~SETALARM;
     }
-    if(P4->IFG & SNOOZE)                                //Snooze/Down Button Press
+
+    //Snooze/Down Button Press
+    if(P4->IFG & SNOOZE)
     {
         displayAt("SNOOZE    ", 4, 2);              //Debugging Display
         P4->IFG &= ~SNOOZE;
@@ -130,55 +160,18 @@ void RTC_C_IRQHandler(void)
         now.sec         =   RTC_C->TIM0>>0 & 0x00FF;
         now.min         =   RTC_C->TIM0>>8 & 0x00FF;
         now.hour        =   RTC_C->TIM1>>0 & 0x00FF;
-        if(now.hour > 12) //rolls over time for 12-hour time
-        {
-            now.hour = 1;
-        }
-
-        if((now.hour == 12) & (now.min == 0) & (now.sec == 0)) //toggles AM and PM flag for each roll over will be used more with UART to convert 24 hr to 12 hr
-        {
-            if(AMPM)
-            {
-                AMPM = 0;
-            }
-            else
-            {
-                AMPM = 1;
-            }
-        }
-
         RTC_flag = 1;
         RTC_C->PS1CTL &= ~BIT0;
-        if(now.hour<10)
-        {
-            sprintf(time," %d",now.hour);
-            displayAt(time,2,1);
-        }
-        else
-        {
-            sprintf(time,"%.2d",now.hour);
-            displayAt(time,2,1);
-        }
-
-        commandWrite(132);
+        sprintf(time,"%.2d",now.hour);
+        displayAt(time,4,1);
+        commandWrite(134);
         dataWrite(0b00111010);
         sprintf(time,"%.2d",now.min);
-        displayAt(time,5,1);
-        commandWrite(135);
+        displayAt(time,7,1);
+        commandWrite(137);
         dataWrite(0b00111010);
         sprintf(time,"%.2d",now.sec);
-        displayAt(time,8,1);
-        if(AMPM) //prints AM or PM based on flag variable
-        {
-            sprintf(time,"PM");
-            displayAt(time,12,1);
-        }
-        else if(!AMPM)
-        {
-            sprintf(time,"AM");
-            displayAt(time,12,1);
-        }
-
+        displayAt(time,10,1);
     }
 }
 
@@ -221,7 +214,7 @@ void configRTC(int hour, int min)
 {
     RTC_C->CTL0     =   0xA500;     //Write Code, IE on RTC Ready
     RTC_C->CTL13    =   0x0000;
-    RTC_C->TIM0     = min<<8 | 55;
+    RTC_C->TIM0     = min<<8 | 00;
     RTC_C->TIM1     = hour;
 
     RTC_C->PS1CTL   = 0b11010;
@@ -425,7 +418,6 @@ void pulseEnablePin(void) //sends data to LCD by pulsing enable pin on and off
     P7->OUT &= ~BIT2; //enable low
     sysTickDelay_us(10);
 }
-
 
 void SysTick_Init(void) //initializes systick timer
 {
