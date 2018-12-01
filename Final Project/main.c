@@ -24,7 +24,7 @@
  * Process for Sending updates
  */
 
-//Nolan TEST
+//Nolan
 
 //max
 //pussy destroyers
