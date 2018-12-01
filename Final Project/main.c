@@ -2,9 +2,10 @@
 #include <stdio.h>
 #include <string.h>
 
-
+#define ADC_CONVERSION_RATE 1500000
 void configRTC(int hour, int min);
-
+void ADC14init(void);
+void tempT32interrupt(void);
 
 void displayText(char text[], int lineNum);
 void displayAt(char text[], int place, int line);
@@ -18,7 +19,8 @@ void sysTickDelay_ms(int ms);
 void sysTickDelay_us(int microsec);
 void SysTick_Init();
 int hour=0,min=0,sec=0,RTC_flag=0;
-char time[17],time1[17] = {'2','r'};
+float temp=0, voltage = 0, raw = 0;
+char time[2],tempAr[3];
 
 // global struct variable called now
 struct
@@ -35,7 +37,9 @@ void main(void)
     WDT_A->CTL = WDT_A_CTL_PW | WDT_A_CTL_HOLD;     // stop watchdog timer
     __enable_interrupt();
     SysTick_Init(); //initializes timer
+    tempT32interrupt();
     LCD_init(); //initializes LCD
+    ADC14init();
     configRTC(12, 30);
     commandWrite(0x01);
     while(1)
@@ -131,6 +135,73 @@ void RTC_C_IRQHandler(void)
         sprintf(time,"%.2d",now.sec);
         displayAt(time,10,1);
     }
+
+}
+
+void ADC14_IRQHandler(void)
+{
+
+    if(ADC14->IFGR0 & BIT0)
+    {
+            raw = ADC14->MEM[0];
+            ADC14->CLRIFGR0     &=  ~BIT1;                  // Clear MEM1 interrupt flag
+            voltage = raw*(3.3/16383);
+            temp  = (1000*voltage - 500)/10;
+            temp = ((temp*9.0)/5.0)+32.0;
+            sprintf(tempAr,"%.1f",temp);
+            displayAt(tempAr,4,4);
+            commandWrite(216);
+            dataWrite(0b11011111);
+            commandWrite(217);
+            dataWrite(0b01000110);
+
+    }
+    ADC14->CLRIFGR1     &=    ~0b1111110;                 // Clear all IFGR1 Interrupts (Bits 6-1.  These could trigger an interrupt and we are checking them for now.)
+}
+
+
+void ADC14init(void)
+{
+    //For Analog Input 8
+    P5->SEL0            |=   BIT5;                      // Select ADC Operation
+    P5->SEL1            |=   BIT5;                      // SEL = 11 sets to ADC operation
+    P5->DIR             &=  ~BIT5;
+    ADC14->CTL0         =    0;                         // Disable ADC for setup
+
+    // CTL0 Configuration
+    // 31-30 = 10   to divide down input clock by 32X
+    // 26    = 1    to sample based on the sample timer.  This enables the use of bits 11-8 below.
+    // 21-19 = 100  for SMCLK
+    // 18-17 = 00   one channel
+    // 11-8  = 0011 for 32 clk sample and hold time
+    // 7     = 1    for multiple ADC channels being read
+    // 4     = 1    to turn on ADC
+    ADC14->CTL0         =    0b10000100001000000000001100010000;
+
+    ADC14->CTL1         =    (BIT5 | BIT4);         // Bits 5 and 4 = 11 to enable 14 bit conversion
+                                                        // Bit 23 turns on Temperature Sensor
+    ADC14->MCTL[0]      =    0;                         // A0 on P5.5
+                                                        // BIT7 says to stop converting after this ADC.
+    ADC14->IER0         |=   BIT0;            // Interrupt on conversion
+//    REF_A->CTL0         |=   BIT0;                      // Turns on the Reference for the Temperature Sensor
+//    REF_A->CTL0         &=   ~BIT3;                     // Turns off the Temperature Sensor Disable
+
+    ADC14->CTL0         |=   0b10;                      // Enable Conversion
+  NVIC_EnableIRQ(ADC14_IRQn);             // Turn on ADC Interrupts in NVIC.  Equivalent to "NVIC_EnableIRQ(ADC14_IRQn);"
+}
+
+void tempT32interrupt(void)
+{
+    TIMER32_1->LOAD       =   ADC_CONVERSION_RATE;        //Set interval for interrupt to occur at
+    TIMER32_1->CONTROL       =   0b11100010;
+    NVIC_EnableIRQ(T32_INT1_IRQn);
+}
+
+
+void T32_INT1_IRQHandler()                          //Interrupt Handler for Timer 2
+{
+    TIMER32_1->INTCLR = 1;                          //Clear interrupt flag so it does not interrupt again immediately.
+    ADC14->CTL0         |=  0b1;              //Start ADC Conversion
 
 }
 
