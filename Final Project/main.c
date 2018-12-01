@@ -22,9 +22,10 @@
 
 /*
  * Process for Sending updates
+ *
+ * Copy from local ->
  */
 
-//Nolan
 
 #include "msp.h"
 #include <stdio.h>
