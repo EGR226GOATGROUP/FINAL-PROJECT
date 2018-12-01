@@ -22,12 +22,11 @@
 
 /*
  * Process for Sending updates
+ *
+ * Copy from local ->
  */
 
-//Nolan
 
-//max
-//pussy destroyers
 #include "msp.h"
 #include <stdio.h>
 #include <string.h>
