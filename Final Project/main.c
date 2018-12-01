@@ -112,18 +112,18 @@ void PORT4_IRQHandler()
     //SetTime Button Press
     if(P4->IFG & SETTIME)
     {
-        displayAt("SETTIME    ", 4, 2);             //Debugging Display
-
+displayAt("SETTIME    ", 4, 2);             //Debugging Display
         if(timePresses==0)                                  //First press -> Go into time Hours edit
         {
-            //disable timer clock
-        }
-        else if(timePresses==3)                             //Third press -> Save time
-        {
-            //enable timer clock
-            //save new time
-        }
+            RTC_C->PS1CTL   = 0b00000;                      //disable timer clock
 
+        }
+        else if(timePresses==2)                             //Third press -> Save time
+        {
+            RTC_C->PS1CTL   = 0b11010;                      //Enable timer clock
+            configRTC(now.hour, now.min);
+            timePresses = -1;
+        }
         timePresses++;
         P4->IFG &= ~SETTIME;
     }
@@ -133,13 +133,13 @@ void PORT4_IRQHandler()
     {
         if(timePresses==1)                              //Incoment Hours
         {
-            now.hour++;
+            now.hour = now.hour+1;
             if(now.hour>12)                                 //hour Rolls Over
                 now.hour=1;
         }
         else if(timePresses==2)                         //incoment Minutes
         {
-            now.min++;
+            now.min++;;
             if(now.min>59)
                 now.min=0;                                  //Minutes roll over
         }
@@ -168,7 +168,8 @@ void PORT4_IRQHandler()
 
 void RTC_C_IRQHandler(void)
 {
-    if(RTC_C->PS1CTL & BIT0) {
+    if(RTC_C->PS1CTL & BIT0)
+    {
         now.sec         =   RTC_C->TIM0>>0 & 0x00FF;
         now.min         =   RTC_C->TIM0>>8 & 0x00FF;
         now.hour        =   RTC_C->TIM1>>0 & 0x00FF;
@@ -222,8 +223,7 @@ void RTC_C_IRQHandler(void)
         }
 
     }
-    }
-
+}
 
 void ADC14_IRQHandler(void)
 {
@@ -235,13 +235,13 @@ void ADC14_IRQHandler(void)
             voltage = raw*(3.3/16383);
             temp  = (1000*voltage - 500)/10;
             temp = ((temp*9.0)/5.0)+32.0;
+
             sprintf(tempAr,"%.1f",temp);
             displayAt(tempAr,4,4);
             commandWrite(216);
             dataWrite(0b11011111);
             commandWrite(217);
             dataWrite(0b01000110);
-
     }
     ADC14->CLRIFGR1     &=    ~0b1111110;                 // Clear all IFGR1 Interrupts (Bits 6-1.  These could trigger an interrupt and we are checking them for now.)
 }
