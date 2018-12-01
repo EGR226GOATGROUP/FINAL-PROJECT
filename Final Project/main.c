@@ -25,8 +25,6 @@
  */
 
 
-//max
-//pussy destroyers
 #include "msp.h"
 #include <stdio.h>
 #include <string.h>
