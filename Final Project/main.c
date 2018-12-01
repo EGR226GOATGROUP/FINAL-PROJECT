@@ -52,6 +52,7 @@ int setTime=0, setAlarm=0;
 int hour=0,min=0,sec=0,RTC_flag=0;
 float temp=0, voltage = 0, raw = 0;
 char time[2],tempAr[3];
+int AMPM = 1; //flag to determine AM or PM will be used more for UART functionality to convert 24 hr to 12 hr time
 
 // global struct variable called now
 struct
@@ -72,8 +73,7 @@ void main(void)
     LCD_init();                                     //initializes LCD
     ADC14init();
     __enable_interrupt();
-
-    configRTC(12, 30);
+    configRTC(12, 59);
     commandWrite(CLEAR);
     while(1)
     {
@@ -130,18 +130,55 @@ void RTC_C_IRQHandler(void)
         now.sec         =   RTC_C->TIM0>>0 & 0x00FF;
         now.min         =   RTC_C->TIM0>>8 & 0x00FF;
         now.hour        =   RTC_C->TIM1>>0 & 0x00FF;
+        if(now.hour > 12) //rolls over time for 12-hour time
+        {
+            now.hour = 1;
+        }
+
+        if((now.hour == 12) & (now.min == 0) & (now.sec == 0)) //toggles AM and PM flag for each roll over will be used more with UART to convert 24 hr to 12 hr
+        {
+            if(AMPM)
+            {
+                AMPM = 0;
+            }
+            else
+            {
+                AMPM = 1;
+            }
+        }
+
         RTC_flag = 1;
         RTC_C->PS1CTL &= ~BIT0;
-        sprintf(time,"%.2d",now.hour);
-        displayAt(time,4,1);
-        commandWrite(134);
+        if(now.hour<10)
+        {
+            sprintf(time," %d",now.hour);
+            displayAt(time,2,1);
+        }
+        else
+        {
+            sprintf(time,"%.2d",now.hour);
+            displayAt(time,2,1);
+        }
+
+        commandWrite(132);
         dataWrite(0b00111010);
         sprintf(time,"%.2d",now.min);
-        displayAt(time,7,1);
-        commandWrite(137);
+        displayAt(time,5,1);
+        commandWrite(135);
         dataWrite(0b00111010);
         sprintf(time,"%.2d",now.sec);
-        displayAt(time,10,1);
+        displayAt(time,8,1);
+        if(AMPM) //prints AM or PM based on flag variable
+        {
+            sprintf(time,"PM");
+            displayAt(time,12,1);
+        }
+        else if(!AMPM)
+        {
+            sprintf(time,"AM");
+            displayAt(time,12,1);
+        }
+
     }
 }
 
@@ -184,7 +221,7 @@ void configRTC(int hour, int min)
 {
     RTC_C->CTL0     =   0xA500;     //Write Code, IE on RTC Ready
     RTC_C->CTL13    =   0x0000;
-    RTC_C->TIM0     = min<<8 | 00;
+    RTC_C->TIM0     = min<<8 | 55;
     RTC_C->TIM1     = hour;
 
     RTC_C->PS1CTL   = 0b11010;
