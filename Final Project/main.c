@@ -190,7 +190,6 @@ void T32_INT2_IRQHandler()                          //Interrupt Handler for Time
     P1->OUT ^= BIT0;
     TIMER_A0->CCR[1] = lightBrightness;
     sprintf(time,"%.2d",lightBrightness);
-    displayAt(time,2,2);
     if(lightBrightness == 1000)
     {
         TIMER_A0->CCR[1] = 0;
