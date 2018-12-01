@@ -208,11 +208,11 @@ void PORT4_IRQHandler()
         if(timePresses==0)                                  //First press -> Go into time Hours edit
         {
             RTC_C->PS1CTL   = 0b00000;                      //disable timer clock
-
-            displayAt(" 1:00:00  AM",2,1);                  //Starts at 00;00;00 AM
-            now.hour=1;
-            now.min=0;
-            AMPM=0;
+//
+            displayAt("00",8,1);                  //Starts at 01;00;00 AM
+//            now.hour=1;
+//            now.min=0;
+//            AMPM=0;
         }
         else if(timePresses==2)                             //Third press -> Save time
         {
