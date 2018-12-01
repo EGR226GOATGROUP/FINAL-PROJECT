@@ -1,3 +1,24 @@
+/*
+ * Pin Out
+ *
+ * Temp Sensor
+ * 5.5 -> Temp Sensor
+ *
+ * Buttons
+ * 4.0 -> SetTime
+ * 4.1 -> On/Off/Up
+ * 4.2 -> AlarmSet
+ * 4.3 -> Snozze/Down
+ *
+ * LCD
+ * 7.0 -> RS
+ * 7.2 -> E
+ * 7.4 -> DB4
+ * 7.5 -> DB5
+ * 7.6 -> DB6
+ * 7.7 -> DB7
+ *
+ */
 #include "msp.h"
 #include <stdio.h>
 #include <string.h>
@@ -49,8 +70,6 @@ void main(void)
 
 }
 
-
-
 void displayAt(char text[], int place, int lineNum)
 {
     int i;
@@ -88,16 +107,6 @@ void displayAt(char text[], int place, int lineNum)
     }
 }
 
-
-
-
-
-
-
-
-
-
-
 void configRTC(int hour, int min)
 {
     RTC_C->CTL0     =   0xA500;     //Write Code, IE on RTC Ready
@@ -111,10 +120,7 @@ void configRTC(int hour, int min)
 
     RTC_C->CTL0     = ((0xA500) | BIT5);
     NVIC_EnableIRQ(RTC_C_IRQn);
-
 }
-
-
 
 void RTC_C_IRQHandler(void)
 {
@@ -135,7 +141,6 @@ void RTC_C_IRQHandler(void)
         sprintf(time,"%.2d",now.sec);
         displayAt(time,10,1);
     }
-
 }
 
 void ADC14_IRQHandler(void)
@@ -205,21 +210,8 @@ void T32_INT1_IRQHandler()                          //Interrupt Handler for Time
 
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
 void displayText(char text[], int lineNum) //function to display text on a given line
 {
-
     int i;
     if(lineNum == 1)
     {
@@ -227,37 +219,30 @@ void displayText(char text[], int lineNum) //function to display text on a given
         {
             dataWrite(text[i]);
         }
-
     }
     else if(lineNum == 2) //displays text on line 2 by starting at 0xA8
         {
-
             commandWrite(0xA8);
             for(i = 0; i<16; i++)
             {
                 dataWrite(text[i]);
             }
-
         }
     else if(lineNum == 3)  //displays text on line 3 by starting at 0x90
         {
-
             commandWrite(0x90);
             for(i = 0; i<16; i++)
             {
                 dataWrite(text[i]);
             }
-
         }
     else if(lineNum == 4) //displays text on line 4 by starting at 0xD0
         {
-
             commandWrite(0xD0);
             for(i = 0; i<16; i++)
             {
                 dataWrite(text[i]);
             }
-
         }
 }
 
@@ -281,10 +266,6 @@ void LCD_init(void) //initializes LCD
     commandWrite(0x02);
     sysTickDelay_us(100);
 
-
-
-
-
     commandWrite(0x8); //2 lines
     sysTickDelay_us(100);
     commandWrite(0x0F); //display on cursor on and blinking
@@ -307,7 +288,6 @@ void commandWrite(uint8_t command) //writes a command to LCD using RS = 0
     sysTickDelay_us(10);
     pushByte(command);
     sysTickDelay_us(10);
-
 }
 
 void dataWrite(uint8_t data) //writes data to LCD using RS = 1
@@ -344,8 +324,6 @@ void pulseEnablePin(void) //sends data to LCD by pulsing enable pin on and off
     sysTickDelay_us(10);
     P7->OUT &= ~BIT2; //enable low
     sysTickDelay_us(10);
-
-
 }
 
 
@@ -362,7 +340,6 @@ void sysTickDelay_ms(int ms) //timer ms
     SysTick->LOAD = ((ms*3000)-1);
     SysTick->VAL = 0;
     while((SysTick->CTRL & BIT(16))==0);
-
 }
 
 void sysTickDelay_us(int microsec) //timer microseconds
