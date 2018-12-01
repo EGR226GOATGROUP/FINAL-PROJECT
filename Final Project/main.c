@@ -186,7 +186,7 @@ void PORT4_IRQHandler()
             RTC_C->PS1CTL   = 0b00000;                      //disable timer clock
 
             displayAt("00:00:00  AM",2,1);                  //Starts at 00;00;00 AM
-            now.hour=0;
+            now.hour=1;
             now.min=0;
             AMPM=0;
         }
