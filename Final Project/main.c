@@ -582,6 +582,7 @@ void configRTC(int hour, int min)
 
     RTC_C->AMINHR   = alarm.hour<<8 | alarm.min | BIT(15) | BIT(7);
 
+
     RTC_C->CTL0     = ((0xA500) | BIT5);
     NVIC_EnableIRQ(RTC_C_IRQn);
 }
@@ -787,8 +788,4 @@ void sysTickDelay_us(int microsec) //timer microseconds
     SysTick->VAL = 0;
     while((SysTick->CTRL & BIT(16))==0);
 }
-
-
-
-
 
