@@ -82,7 +82,7 @@ void wakeUpLights(void);
 void LEDT32interrupt(void);
 
 int timePresses=0, alarmPresses=0;
-float tempC=0,tempF = 0,tempK=0, voltage = 0, raw = 0;
+float tempC=0,tempF = 0, voltage = 0, raw = 0;
 char time[2],tempAr[3];
 int RTC_flag =0, alarmFlag=0;
 int AMPM = 1;                       //flag to determine AM or PM will be used more for UART functionality to convert 24 hr to 12 hr time
