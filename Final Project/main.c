@@ -111,11 +111,10 @@ void main(void)
     LED_init();
 
     commandWrite(CLEAR);
-    displayAt("CUNT",2,2);
+    displayAt("Nolan is a fuck boy",2,2);
 
     __enable_interrupt();
 
-    commandWrite(CLEAR);
     configRTC(12, 30);
 
     lightsOn = 1;
