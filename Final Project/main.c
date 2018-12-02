@@ -61,6 +61,8 @@ void intButtons();
 void displayAMPM();
 void toggleAMPM();
 void displayHour();
+void toggleAlarm();
+void displayAlarm();
 
 
 void displayText(char text[], int lineNum);
@@ -81,9 +83,9 @@ void LEDT32interrupt(void);
 int timePresses=0, alarmPresses=0;
 float temp=0, voltage = 0, raw = 0;
 char time[2],tempAr[3];
-int RTC_flag =0;
-int AMPM = 1; //flag to determine AM or PM will be used more for UART functionality to convert 24 hr to 12 hr time
-int lightsOn = 0; //flag to be used to check if the wake up lights should be turned on
+int RTC_flag =0, alarmFlag=0;
+int AMPM = 1;                       //flag to determine AM or PM will be used more for UART functionality to convert 24 hr to 12 hr time
+int lightsOn = 0;                   //flag to be used to check if the wake up lights should be turned on
 int lightBrightness = 0;
 // global struct variable called now
 struct
@@ -98,6 +100,8 @@ struct
 void main(void)
 {
     WDT_A->CTL = WDT_A_CTL_PW | WDT_A_CTL_HOLD;     // stop watchdog timer
+    //Initilizing Interupts
+    __disable_interrupt();
     intButtons();
     SysTick_Init();                                 //initializes timer
     tempT32interrupt();
@@ -107,8 +111,9 @@ void main(void)
     LED_init();
     __enable_interrupt();
 
-    configRTC(12, 30);
     commandWrite(CLEAR);
+    configRTC(12, 30);
+
     lightsOn = 1;
 
     P1->SEL0 &= ~BIT0;
@@ -129,6 +134,22 @@ void main(void)
 void wakeUpLights(void)
 {
     TIMER32_2->CONTROL |= BIT7;
+}
+
+void toggleAlarm()
+{
+    if(alarmFlag)
+        alarmFlag=0;
+    else
+        alarmFlag=1;
+}
+
+void displayAlarm()
+{
+    if(alarmFlag)
+        displayAt("Alarm: ON ",3,3);
+    else
+        displayAt("Alarm: OFF",3,3);
 }
 
 void toggleAMPM()                                   //Toggle AMPM when hours roll over
@@ -183,6 +204,7 @@ void T32_INT1_IRQHandler()                          //Interrupt Handler for Time
     ADC14->CTL0         |=  0b1;                    //Start ADC Conversion
 
 }
+
 void T32_INT2_IRQHandler()                          //Interrupt Handler for Timer 2
 {
     TIMER32_2->INTCLR = 1;                          //Clear interrupt flag so it does not interrupt again immediately.
@@ -208,11 +230,8 @@ void PORT4_IRQHandler()
         if(timePresses==0)                                  //First press -> Go into time Hours edit
         {
             RTC_C->PS1CTL   = 0b00000;                      //disable timer clock
-//
-            displayAt("00",8,1);                  //Starts at 01;00;00 AM
-//            now.hour=1;
-//            now.min=0;
-//            AMPM=0;
+            displayAt("00",8,1);                            //clears seconds
+
         }
         else if(timePresses==2)                             //Third press -> Save time
         {
@@ -246,6 +265,12 @@ void PORT4_IRQHandler()
                 now.min=0;                                  //Minutes reset
             displayMin();
         }
+        else
+        {
+            toggleAlarm();
+            displayAlarm();
+        }
+
 
         P4->IFG &= ~(ALARM|UP);
     }
@@ -302,6 +327,8 @@ void RTC_C_IRQHandler(void)
             toggleAMPM();
         }
 
+        displayAlarm();
+
         RTC_flag = 1;
         RTC_C->PS1CTL &= ~BIT0;
         displayHour();
@@ -315,7 +342,6 @@ void RTC_C_IRQHandler(void)
         displayAt(time,8,1);
 
         displayAMPM();
-
     }
 }
 
@@ -341,6 +367,8 @@ void ADC14_IRQHandler(void)
 }
 
 //------------------------------------------------------------Initilizations-----------------------------------------------------------------------
+
+
 void intButtons()
 {
     P4->SEL0 &= ~(BIT0|BIT1|BIT2|BIT3);
@@ -602,6 +630,9 @@ void sysTickDelay_us(int microsec) //timer microseconds
     SysTick->VAL = 0;
     while((SysTick->CTRL & BIT(16))==0);
 }
+
+//test
+
 
 
 
