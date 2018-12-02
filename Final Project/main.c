@@ -154,9 +154,9 @@ void toggleAlarm()
 void displayAlarm()
 {
     if(alarmFlag)
-        displayAt("Alarm: ON ",3,3);
+        displayAt("ON ",10,3);
     else
-        displayAt("Alarm: OFF",3,3);
+        displayAt("OFF",10,3);
 }
 
 void toggleAMPM()                                   //Toggle AMPM when hours roll over
