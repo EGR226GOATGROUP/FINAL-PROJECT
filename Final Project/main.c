@@ -149,9 +149,16 @@ void wakeUpLights(void)
 void toggleAlarm()
 {
     if(alarmFlag)
+    {
         alarmFlag=0;
+        displayAt("OFF",10,3);
+    }
+
     else
+    {
         alarmFlag=1;
+        displayAt("ON ",10,3);
+    }
 }
 
 void displayAlarm()
@@ -162,11 +169,8 @@ void displayAlarm()
         sprintf(time," %d",alarm.hour);
         displayAt(time,3,2);
     }
-    if(alarmFlag)
-        displayAt("Alarm: ON ",3,3);
 
     else
-
     {
         sprintf(time,"%.2d",alarm.hour);
         displayAt(time,3,2);
@@ -174,7 +178,6 @@ void displayAlarm()
 
     sprintf(time,"%.2d",alarm.min);
     displayAt(time,6,2);
-
 }
 
 void toggleAMPM2()
@@ -189,9 +192,6 @@ void toggleAMPM2()
         AMPM2=1;
         displayAt("AM",10,2);
     }
-
-        displayAt("Alarm: OFF",3,3);
-
 }
 
 void toggleAMPM()                                   //Toggle AMPM when hours roll over
@@ -266,19 +266,21 @@ void PORT4_IRQHandler()
     //SetTime Button Press
     if(P4->IFG & SETTIME)
     {
-        if(timePresses==0)                                  //First press -> Go into time Hours edit
+        if((timePresses==0) & (alarmPresses==0))                                  //First press -> Go into time Hours edit
         {
             RTC_C->PS1CTL   = 0b00000;                      //disable timer clock
             displayAt("00",8,1);                            //clears seconds
-
+            timePresses++;
         }
+        else if((timePresses==1) & (alarmPresses==0))
+            timePresses++;
         else if(timePresses==2)                             //Third press -> Save time
         {
             RTC_C->PS1CTL   = 0b11010;                      //Enable timer clock
             configRTC(now.hour, now.min);
-            timePresses = -1;
+            timePresses = 0;
         }
-        timePresses++;
+
         P4->IFG &= ~SETTIME;
     }
 
@@ -306,7 +308,7 @@ void PORT4_IRQHandler()
         else if(alarmPresses==1)
         {
             alarm.hour++;
-            if(alarm.hour>12)                                //hour Rolls Over
+            if(alarm.hour>12)
             {
                 alarm.hour=1;
                 toggleAMPM2();
@@ -316,17 +318,15 @@ void PORT4_IRQHandler()
         else if(alarmPresses==2)
         {
             alarm.min++;
-            if(alarm.min>59)                                //hour Rolls Over
+            if(alarm.min>59)
             {
-                alarm.hour=0;
+                alarm.min=0;
             }
             displayAlarm();
         }
-
-        else
+        else                                            //toggles alarm output and alarmflag
         {
             toggleAlarm();
-            displayAlarm();
         }
 
         P4->IFG &= ~(ALARM|UP);
@@ -335,8 +335,11 @@ void PORT4_IRQHandler()
     //SetAlarm Button Press
     if(P4->IFG & SETALARM)                              //SetAlarm Button Press
     {
-        alarmPresses++;
-        if(alarmPresses==2)
+        if(timePresses==0)
+        {
+            alarmPresses++;
+        }
+        if(alarmPresses==3)
             alarmPresses=0;
         P4->IFG &= ~SETALARM;
     }
@@ -362,6 +365,25 @@ void PORT4_IRQHandler()
             if(now.min>59)
                 now.min=59;                                  //Minutes reset
             displayMin();
+        }
+        else if(alarmPresses==1)
+        {
+            alarm.hour--;
+            if(alarm.hour==0)
+            {
+                alarm.hour=12;
+                toggleAMPM2();
+            }
+            displayAlarm();
+        }
+        else if(alarmPresses==2)
+        {
+            alarm.min--;
+            if(alarm.min>100)
+            {
+                alarm.min=59;
+            }
+            displayAlarm();
         }
 
         P4->IFG &= ~SNOOZE;
@@ -680,7 +702,7 @@ void sysTickDelay_us(int microsec) //timer microseconds
     while((SysTick->CTRL & BIT(16))==0);
 }
 
-//
+
 
 
 
