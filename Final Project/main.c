@@ -57,6 +57,7 @@ void configRTC(int hour, int min);
 void ADC14init(void);
 void tempT32interrupt(void);
 void intButtons();
+void intAlarm();
 
 void displayAMPM();
 void toggleAMPM();
@@ -110,11 +111,12 @@ void main(void)
     ADC14init();
     LED_init();
 
+
     commandWrite(CLEAR);
-    displayAt("Nolan is a fuck boy",2,2);
+
+    intAlarm();
 
     __enable_interrupt();
-
     configRTC(12, 30);
 
     lightsOn = 1;
@@ -371,6 +373,12 @@ void ADC14_IRQHandler(void)
 
 //------------------------------------------------------------Initilizations-----------------------------------------------------------------------
 
+
+void intAlarm()
+{
+    displayAt("6:00  AM",4,2);
+    displayAt("Alarm: OFF",3,3);
+}
 
 void intButtons()
 {
