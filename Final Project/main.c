@@ -41,7 +41,7 @@
  *
  */
 
-//
+
 
 #include "msp.h"
 #include <stdio.h>
@@ -133,7 +133,9 @@ void main(void)
     P1->OUT &= ~BIT0;
     TIMER_A0->CCR[4] = 1000;         //sets LCD brightness CCR[0] set to 1000 CCR[4]/CCR[0]*100 gives brightness percentage
     __enable_interrupt();
-    configRTC(12, 30);
+    now.hour = 12;
+    now.min = 35;
+    configRTC(now.hour, now.min);
 
     lightsOn = 1;
 
@@ -527,7 +529,7 @@ void configRTC(int hour, int min)
 
     RTC_C->PS1CTL   = 0b11010;
 
-    RTC_C->AMINHR   = 12<<8 | 31 | BIT(15) | BIT(7);
+    RTC_C->AMINHR   = alarm.hour<<8 | alarm.min | BIT(15) | BIT(7);
 
     RTC_C->CTL0     = ((0xA500) | BIT5);
     NVIC_EnableIRQ(RTC_C_IRQn);
@@ -736,6 +738,6 @@ void sysTickDelay_us(int microsec) //timer microseconds
 }
 
 
-
+//
 
 
