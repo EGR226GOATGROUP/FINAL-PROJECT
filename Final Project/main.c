@@ -39,7 +39,7 @@
  *
  */
 
-//
+
 
 #include "msp.h"
 #include <stdio.h>
@@ -65,6 +65,7 @@ void toggleAMPM();
 void displayHour();
 void toggleAlarm();
 void displayAlarm();
+void toggleAMPM2();
 
 
 void displayAt(char text[], int place, int line);
@@ -81,13 +82,13 @@ void LED_init(void);
 void wakeUpLights(void);
 void LEDT32interrupt(void);
 
-int timePresses=0, alarmPresses=0;
 float tempC=0,tempF = 0, voltage = 0, raw = 0;
 char time[2],tempAr[3];
-int RTC_flag =0, alarmFlag=0;
-int AMPM = 1;                       //flag to determine AM or PM will be used more for UART functionality to convert 24 hr to 12 hr time
+int RTC_flag =0, timePresses=0, alarmFlag=0, alarmPresses=0;
+int AMPM = 1, AMPM2=1;                       //flag to determine AM or PM will be used more for UART functionality to convert 24 hr to 12 hr time
 int lightsOn = 0;                   //flag to be used to check if the wake up lights should be turned on
 int lightBrightness = 0;
+
 // global struct variable called now
 struct
 {
@@ -95,6 +96,12 @@ struct
     uint8_t min;
     uint8_t hour;
 } now;
+
+struct
+{
+    uint8_t min;
+    uint8_t hour;
+} alarm;
 
 //-----------------------------------------MAIN----------------------------------------------------
 
@@ -129,7 +136,6 @@ void main(void)
     {
 
     }
-
 }
 
 //--------------------------------------------------Non-Interrupt Functions-----------------------------------------------------------
@@ -149,10 +155,34 @@ void toggleAlarm()
 
 void displayAlarm()
 {
-    if(alarmFlag)
-        displayAt("ON ",10,3);
+    if(alarm.hour<10)
+    {
+        sprintf(time," %d",alarm.hour);
+        displayAt(time,3,2);
+    }
     else
-        displayAt("OFF",10,3);
+    {
+        sprintf(time,"%.2d",alarm.hour);
+        displayAt(time,3,2);
+    }
+
+    sprintf(time,"%.2d",alarm.min);
+    displayAt(time,6,2);
+
+}
+
+void toggleAMPM2()
+{
+    if(AMPM2)
+    {
+        AMPM2=0;
+        displayAt("PM",10,2);
+    }
+    else
+    {
+        AMPM2=1;
+        displayAt("AM",10,2);
+    }
 }
 
 void toggleAMPM()                                   //Toggle AMPM when hours roll over
@@ -220,8 +250,6 @@ void T32_INT2_IRQHandler()                          //Interrupt Handler for Time
         TIMER32_2->CONTROL &= ~BIT7;
         lightsOn = 0;
     }
-
-
 }
 
 void PORT4_IRQHandler()
@@ -257,7 +285,6 @@ void PORT4_IRQHandler()
                 toggleAMPM();
                 displayAMPM();
             }
-
             displayHour();
         }
         else if(timePresses==2)                         //incoment Minutes
@@ -267,12 +294,31 @@ void PORT4_IRQHandler()
                 now.min=0;                                  //Minutes reset
             displayMin();
         }
+        else if(alarmPresses==1)
+        {
+            alarm.hour++;
+            if(alarm.hour>12)                                //hour Rolls Over
+            {
+                alarm.hour=1;
+                toggleAMPM2();
+            }
+            displayAlarm();
+        }
+        else if(alarmPresses==2)
+        {
+            alarm.min++;
+            if(alarm.min>59)                                //hour Rolls Over
+            {
+                alarm.hour=0;
+            }
+            displayAlarm();
+        }
+
         else
         {
             toggleAlarm();
             displayAlarm();
         }
-
 
         P4->IFG &= ~(ALARM|UP);
     }
@@ -280,8 +326,9 @@ void PORT4_IRQHandler()
     //SetAlarm Button Press
     if(P4->IFG & SETALARM)                              //SetAlarm Button Press
     {
-
         alarmPresses++;
+        if(alarmPresses==2)
+            alarmPresses=0;
         P4->IFG &= ~SETALARM;
     }
 
@@ -383,6 +430,8 @@ void intAlarm()
 {
     displayAt("6:00  AM",4,2);
     displayAt("Alarm: OFF",3,3);
+    alarm.hour = 6;
+    alarm.min = 0;
 }
 
 void intButtons()
