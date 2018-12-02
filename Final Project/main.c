@@ -109,6 +109,10 @@ void main(void)
     LCD_init();                                     //initializes LCD
     ADC14init();
     LED_init();
+
+    commandWrite(CLEAR);
+    displayAt("CUNT",2,2);
+
     __enable_interrupt();
 
     commandWrite(CLEAR);
@@ -630,9 +634,6 @@ void sysTickDelay_us(int microsec) //timer microseconds
     SysTick->VAL = 0;
     while((SysTick->CTRL & BIT(16))==0);
 }
-
-//test
-
 
 
 
