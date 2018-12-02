@@ -41,7 +41,7 @@
  *
  */
 
-
+//
 
 #include "msp.h"
 #include <stdio.h>
@@ -134,9 +134,7 @@ void main(void)
     P1->OUT &= ~BIT0;
     TIMER_A0->CCR[4] = 1000;         //sets LCD brightness CCR[0] set to 1000 CCR[4]/CCR[0]*100 gives brightness percentage
     __enable_interrupt();
-    now.hour = 12;
-    now.min = 35;
-    configRTC(now.hour, now.min);
+    configRTC(12, 30);
 
     lightsOn = 1;
 
@@ -791,3 +789,4 @@ void sysTickDelay_us(int microsec) //timer microseconds
     SysTick->VAL = 0;
     while((SysTick->CTRL & BIT(16))==0);
 }
+
