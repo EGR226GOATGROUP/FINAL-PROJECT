@@ -23,6 +23,9 @@
  * P2.5 -> GREEN   TIMERA0.2
  * P2.6 -> BLUE    TIMERA0.3
  *
+ *
+ *P2.7 -> PWM LCD BRIGHTNESS
+ *P9.3 -> TIMERA3.4 BLINK TIMER DO NOT USE PIN
  */
 
 /*
@@ -81,6 +84,7 @@ void LED_init(void);
 void wakeUpLights(void);
 void LEDT32interrupt(void);
 void intLCDBrightness(void);
+void intBlinkTimerA(void);
 
 float tempC=0,tempF = 0, voltage = 0, raw = 0;
 char time[2],tempAr[3];
@@ -114,6 +118,7 @@ void main(void)
     SysTick_Init();                                 //initializes timer
     tempT32interrupt();
     LEDT32interrupt();
+    intBlinkTimerA();
     LCD_init();                                     //initializes LCD
     ADC14init();
     LED_init();
@@ -122,17 +127,17 @@ void main(void)
     commandWrite(CLEAR);
 
     intAlarm();
-
+    P1->SEL0 &= ~BIT0;
+    P1->SEL1 &= ~BIT0;
+    P1->DIR |= BIT0;
+    P1->OUT &= ~BIT0;
+    TIMER_A0->CCR[4] = 1000;         //sets LCD brightness CCR[0] set to 1000 CCR[4]/CCR[0]*100 gives brightness percentage
     __enable_interrupt();
     configRTC(12, 30);
 
     lightsOn = 1;
 
-//    P1->SEL0 &= ~BIT0;
-//    P1->SEL1 &= ~BIT0;
-//    P1->DIR |= BIT0;
-//    P1->OUT &= ~BIT0;
-    TIMER_A0->CCR[4] = 1000;         //sets LCD brightness CCR[0] set to 1000 CCR[4]/CCR[0]*100 gives brightness percentage
+
     while(1)
     {
 
@@ -432,8 +437,34 @@ void ADC14_IRQHandler(void)
 
 }
 
+void TA3_N_IRQHandler()
+{
+    if(TIMER_A3->CCTL[4] & BIT0)
+    {
+        TIMER_A3->CCTL[4] &= ~BIT0;
+        TIMER_A3->CCTL[4] &= ~BIT1;
+        //ADD CODE TO BLINK TIME HERE
+       //  use -> NVIC_DisableIRQ(TA3_N_IRQn); to turn off blinking
+    }
+}
+
 //------------------------------------------------------------Initilizations-----------------------------------------------------------------------
 
+
+void intBlinkTimerA(void)
+{
+    P9->SEL0 |= BIT3;
+    P9->SEL1 &= BIT3;
+    P9->DIR |= BIT3;
+    P9->IE |= BIT3;
+    P9->IES |= BIT3;
+    TIMER_A3->EX0 = 0b0000000000000111;             // Bonus clock divider This register allows me to divide the clock by 1+EX0, in this case, a divider of 8
+    TIMER_A3->CTL = 0b0000001011010100;             // SMCLK, Divide by 8, Count Up, Clear to start
+    TIMER_A3->CCR[0] = 23437;                       // counts half a second
+    TIMER_A3->CCTL[4] = 0b0000000011110100;         // CCR1 reset/set mode 7, with interrupt.
+    TIMER_A3->CCR[4] = 11718;                       // Duty cycle to 50% to start (1/2 of CCR0).
+    NVIC_EnableIRQ(TA3_N_IRQn);                     //USE THIS LINE TO TURN OFF INTERRUPT
+}
 void intLCDBrightness(void)
 {
     P2->SEL0 |=  BIT7;
@@ -442,7 +473,7 @@ void intLCDBrightness(void)
 
     TIMER_A0->CCR[0] = 1000-1;
     TIMER_A0->CCTL[4] = 0b11100000;
-    TIMER_A0->CTL = 0b1000010100;
+    TIMER_A0->CTL = 0b1000010100;           //timer a pwm
 }
 void intAlarm()
 {
@@ -523,6 +554,8 @@ void LEDT32interrupt(void)
     TIMER32_2->CONTROL       =  0b01101000; //use bit 7 to enable in wake up lights, interrupt enabled, divide by 256, 16 bit mode, wrapping mode
     NVIC_EnableIRQ(T32_INT2_IRQn);
 }
+
+
 
 void LED_init(void)
 {
