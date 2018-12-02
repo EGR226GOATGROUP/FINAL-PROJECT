@@ -23,7 +23,6 @@
  * P2.5 -> GREEN   TIMERA0.2
  * P2.6 -> BLUE    TIMERA0.3
  *
- *
  */
 
 /*
@@ -81,6 +80,7 @@ void SysTick_Init();
 void LED_init(void);
 void wakeUpLights(void);
 void LEDT32interrupt(void);
+void intLCDBrightness(void);
 
 float tempC=0,tempF = 0, voltage = 0, raw = 0;
 char time[2],tempAr[3];
@@ -117,7 +117,7 @@ void main(void)
     LCD_init();                                     //initializes LCD
     ADC14init();
     LED_init();
-
+    intLCDBrightness();
 
     commandWrite(CLEAR);
 
@@ -128,10 +128,11 @@ void main(void)
 
     lightsOn = 1;
 
-    P1->SEL0 &= ~BIT0;
-    P1->SEL1 &= ~BIT0;
-    P1->DIR |= BIT0;
-    P1->OUT &= ~BIT0;
+//    P1->SEL0 &= ~BIT0;
+//    P1->SEL1 &= ~BIT0;
+//    P1->DIR |= BIT0;
+//    P1->OUT &= ~BIT0;
+    TIMER_A0->CCR[4] = 1000;         //sets LCD brightness CCR[0] set to 1000 CCR[4]/CCR[0]*100 gives brightness percentage
     while(1)
     {
 
@@ -155,12 +156,17 @@ void toggleAlarm()
 
 void displayAlarm()
 {
+
     if(alarm.hour<10)
     {
         sprintf(time," %d",alarm.hour);
         displayAt(time,3,2);
     }
+    if(alarmFlag)
+        displayAt("Alarm: ON ",3,3);
+
     else
+
     {
         sprintf(time,"%.2d",alarm.hour);
         displayAt(time,3,2);
@@ -183,6 +189,9 @@ void toggleAMPM2()
         AMPM2=1;
         displayAt("AM",10,2);
     }
+
+        displayAt("Alarm: OFF",3,3);
+
 }
 
 void toggleAMPM()                                   //Toggle AMPM when hours roll over
@@ -425,7 +434,16 @@ void ADC14_IRQHandler(void)
 
 //------------------------------------------------------------Initilizations-----------------------------------------------------------------------
 
+void intLCDBrightness(void)
+{
+    P2->SEL0 |=  BIT7;
+    P2->SEL1 &= ~BIT7;
+    P2->DIR |=   BIT7;
 
+    TIMER_A0->CCR[0] = 1000-1;
+    TIMER_A0->CCTL[4] = 0b11100000;
+    TIMER_A0->CTL = 0b1000010100;
+}
 void intAlarm()
 {
     displayAt("6:00  AM",4,2);
