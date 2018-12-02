@@ -66,7 +66,6 @@ void toggleAlarm();
 void displayAlarm();
 
 
-void displayText(char text[], int lineNum);
 void displayAt(char text[], int place, int line);
 void LCD_init(void);
 void commandWrite(uint8_t command);
@@ -128,10 +127,6 @@ void main(void)
     while(1)
     {
 
-        while(lightsOn)
-        {
-            wakeUpLights();
-        }
     }
 
 }
@@ -511,41 +506,7 @@ void displayAt(char text[], int place, int lineNum)
     }
 }
 
-void displayText(char text[], int lineNum) //function to display text on a given line
-{
-    int i;
-    if(lineNum == 1)
-    {
-        for(i = 0; i<16; i++) //displays text on line one
-        {
-            dataWrite(text[i]);
-        }
-    }
-    else if(lineNum == 2) //displays text on line 2 by starting at 0xA8
-        {
-            commandWrite(0xA8);
-            for(i = 0; i<16; i++)
-            {
-                dataWrite(text[i]);
-            }
-        }
-    else if(lineNum == 3)  //displays text on line 3 by starting at 0x90
-        {
-            commandWrite(0x90);
-            for(i = 0; i<16; i++)
-            {
-                dataWrite(text[i]);
-            }
-        }
-    else if(lineNum == 4) //displays text on line 4 by starting at 0xD0
-        {
-            commandWrite(0xD0);
-            for(i = 0; i<16; i++)
-            {
-                dataWrite(text[i]);
-            }
-        }
-}
+
 
 //----------------------------------------------------------LCD Back end----------------------------------------------------------------------------
 
@@ -586,7 +547,7 @@ void LCD_init(void) //initializes LCD
 void commandWrite(uint8_t command) //writes a command to LCD using RS = 0
 {
     P7->OUT &= ~BIT0; //rs=0
-    sysTickDelay_ms(5);
+    sysTickDelay_us(10);
     P7->OUT &= ~0xF0; //clears data pins
     sysTickDelay_us(10);
     pushByte(command);
@@ -596,7 +557,7 @@ void commandWrite(uint8_t command) //writes a command to LCD using RS = 0
 void dataWrite(uint8_t data) //writes data to LCD using RS = 1
 {
     P7->OUT |= BIT0; //rs=1
-    sysTickDelay_ms(5);
+    sysTickDelay_us(10);
     P7->OUT &= ~0xF0; //clears data pins
     sysTickDelay_us(10);
     pushByte(data);
@@ -606,14 +567,14 @@ void dataWrite(uint8_t data) //writes data to LCD using RS = 1
 void pushByte(uint8_t byte) //stores 4 bits into variable and sends nibble to push nibble twice for each half of the byte
 {
     pushNibble((byte & 0xF0)); //sends first nibble
-    sysTickDelay_ms(5);
+    sysTickDelay_ms(2);
     pushNibble((byte & 0x0F)<<4); //shifts second nibble and sends it through pins 4-7
 }
 
 void pushNibble(uint8_t nibble) //sets nibble up in data pins for pulse
 {
     P7->OUT &= ~0xF0; //clearing data pins
-    sysTickDelay_ms(5);
+    sysTickDelay_ms(2);
     P7->OUT |= (nibble & 0xF0); //sends a nibble through pins 4-7
     sysTickDelay_us(10);
     pulseEnablePin();
