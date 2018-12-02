@@ -92,6 +92,7 @@ int RTC_flag =0, timePresses=0, alarmFlag=0, alarmPresses=0;
 int AMPM = 1, AMPM2=1;                       //flag to determine AM or PM will be used more for UART functionality to convert 24 hr to 12 hr time
 int lightsOn = 0;                   //flag to be used to check if the wake up lights should be turned on
 int lightBrightness = 0;
+int blinkFlag = 0;
 
 // global struct variable called now
 struct
@@ -470,6 +471,54 @@ void TA3_N_IRQHandler()
     {
         TIMER_A3->CCTL[4] &= ~BIT0;
         TIMER_A3->CCTL[4] &= ~BIT1;
+        if((timePresses == 1) & (blinkFlag == 0))
+        {
+            displayAt("  ",2,1);
+            displayMin();
+            blinkFlag = 1;
+        }
+        else if((timePresses == 1) & (blinkFlag == 1))
+        {
+            displayHour();
+            displayMin();
+            blinkFlag = 0;
+        }
+        else if((timePresses == 2) & (blinkFlag == 0))
+        {
+            displayHour();
+            displayAt("  ",5,1);
+            blinkFlag = 1;
+        }
+        else if((timePresses == 2) & (blinkFlag == 1))
+        {
+            displayHour();
+            displayMin();
+            blinkFlag = 0;
+        }
+
+        else if((alarmPresses == 1) & (blinkFlag == 0))
+        {
+            displayAlarm();
+            displayAt("  ",3,2);
+            blinkFlag = 1;
+        }
+        else if((alarmPresses == 1) & (blinkFlag == 1))
+        {
+            displayAlarm();
+            blinkFlag = 0;
+        }
+        else if((alarmPresses == 2) & (blinkFlag == 0))
+        {
+            displayAlarm();
+            displayAt("  ",6,2);
+            blinkFlag = 1;
+        }
+        else if((alarmPresses == 2) & (blinkFlag == 1))
+        {
+            displayAlarm();
+            blinkFlag = 0;
+        }
+
         //ADD CODE TO BLINK TIME HERE
        //  use -> NVIC_DisableIRQ(TA3_N_IRQn); to turn off blinking
     }
@@ -532,7 +581,7 @@ void configRTC(int hour, int min)
 
     RTC_C->PS1CTL   = 0b11010;
 
-    RTC_C->AMINHR   = 12<<8 | 31 | BIT(15) | BIT(7);
+    RTC_C->AMINHR   = 10<<8 | 5 | BIT(15) | BIT(7);
 
     RTC_C->CTL0     = ((0xA500) | BIT5);
     NVIC_EnableIRQ(RTC_C_IRQn);
