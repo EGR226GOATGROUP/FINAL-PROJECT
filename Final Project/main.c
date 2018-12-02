@@ -124,8 +124,10 @@ void main(void)
     P1->SEL0 &= ~BIT0;
     P1->SEL1 &= ~BIT0;
     P1->DIR |= BIT0;
+    P1->OUT &= ~BIT0;
     while(1)
     {
+
         while(lightsOn)
         {
             wakeUpLights();
@@ -214,7 +216,6 @@ void T32_INT2_IRQHandler()                          //Interrupt Handler for Time
 {
     TIMER32_2->INTCLR = 1;                          //Clear interrupt flag so it does not interrupt again immediately.
     lightBrightness+= 10;                           //increase brightness by 1% every interrupt (3 seconds when enabled)
-    P1->OUT ^= BIT0;
     TIMER_A0->CCR[1] = lightBrightness;
     sprintf(time,"%.2d",lightBrightness);
     if(lightBrightness == 1000)
@@ -352,7 +353,7 @@ void RTC_C_IRQHandler(void)
 
 void ADC14_IRQHandler(void)
 {
-
+    ADC14->CLRIFGR1     &=    ~0b1111110;                 // Clear all IFGR1 Interrupts (Bits 6-1.  These could trigger an interrupt and we are checking them for now.)
     if(ADC14->IFGR0 & BIT0)
     {
             raw = ADC14->MEM[0];
@@ -360,7 +361,6 @@ void ADC14_IRQHandler(void)
             voltage = raw*(3.3/16383);
             tempC  = (1000*voltage - 500)/10;
             tempF = ((tempC*9.0)/5.0)+32.0;
-
             sprintf(tempAr,"%.1f",tempF);                   //displays temperature
             displayAt(tempAr,1,4);
             commandWrite(213);                              //moves cursor to degrees symbol spot
@@ -377,7 +377,7 @@ void ADC14_IRQHandler(void)
 
 
     }
-    ADC14->CLRIFGR1     &=    ~0b1111110;                 // Clear all IFGR1 Interrupts (Bits 6-1.  These could trigger an interrupt and we are checking them for now.)
+
 }
 
 //------------------------------------------------------------Initilizations-----------------------------------------------------------------------
