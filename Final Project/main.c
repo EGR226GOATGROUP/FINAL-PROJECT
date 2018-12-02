@@ -82,7 +82,7 @@ void wakeUpLights(void);
 void LEDT32interrupt(void);
 
 int timePresses=0, alarmPresses=0;
-float temp=0, voltage = 0, raw = 0;
+float tempC=0,tempF = 0,tempK=0, voltage = 0, raw = 0;
 char time[2],tempAr[3];
 int RTC_flag =0, alarmFlag=0;
 int AMPM = 1;                       //flag to determine AM or PM will be used more for UART functionality to convert 24 hr to 12 hr time
@@ -358,15 +358,25 @@ void ADC14_IRQHandler(void)
             raw = ADC14->MEM[0];
             ADC14->CLRIFGR0     &=  ~BIT1;                  // Clear MEM1 interrupt flag
             voltage = raw*(3.3/16383);
-            temp  = (1000*voltage - 500)/10;
-            temp = ((temp*9.0)/5.0)+32.0;
+            tempC  = (1000*voltage - 500)/10;
+            tempF = ((tempC*9.0)/5.0)+32.0;
+            tempK = tempC+273.15;
 
-            sprintf(tempAr,"%.1f",temp);
-            displayAt(tempAr,4,4);
-            commandWrite(216);
-            dataWrite(0b11011111);
-            commandWrite(217);
-            dataWrite(0b01000110);
+            sprintf(tempAr,"%.1f",tempF);                   //displays temperature
+            displayAt(tempAr,1,4);
+            commandWrite(213);                              //moves cursor to degrees symbol spot
+            dataWrite(0b11011111);                          //prints degrees symbol
+            commandWrite(214);                              //moves cursor to fahrenheit spot
+            dataWrite(0b01000110);                          //prints an f
+
+            sprintf(tempAr,"%.1f",tempC);                   //displays temperature
+            displayAt(tempAr,9,4);
+            commandWrite(221);                              //moves cursor to degrees symbol spot
+            dataWrite(0b11011111);                          //prints degrees symbol
+            commandWrite(222);                              //moves cursor to fahrenheit spot
+            dataWrite(0b01000011);                          //prints an c
+
+
     }
     ADC14->CLRIFGR1     &=    ~0b1111110;                 // Clear all IFGR1 Interrupts (Bits 6-1.  These could trigger an interrupt and we are checking them for now.)
 }
