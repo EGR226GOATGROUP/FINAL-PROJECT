@@ -36,8 +36,7 @@
  * Commit and Push
  * If there is error -> Pull
  * Save the main.c (Git Repository)
- * Make change to save again
- * Commit and Push again
+ *
  *
  */
 
