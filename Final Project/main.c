@@ -429,6 +429,11 @@ void RTC_C_IRQHandler(void)
         displayAt(time,8,1);
 
         displayAMPM();
+
+        if(RTC_C->CTL0 & BIT1) {
+            P1->OUT |= BIT0;            //this is what happens when alarm goes off
+            RTC_C->CTL0 = 0xA500;
+        }
     }
 }
 
