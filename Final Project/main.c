@@ -41,7 +41,7 @@
  *
  */
 
-
+//
 
 #include "msp.h"
 #include <stdio.h>
@@ -134,9 +134,7 @@ void main(void)
     P1->OUT &= ~BIT0;
     TIMER_A0->CCR[4] = 1000;         //sets LCD brightness CCR[0] set to 1000 CCR[4]/CCR[0]*100 gives brightness percentage
     __enable_interrupt();
-    now.hour = 12;
-    now.min = 35;
-    configRTC(now.hour, now.min);
+    configRTC(12, 30);
 
     lightsOn = 1;
 
@@ -583,11 +581,7 @@ void configRTC(int hour, int min)
 
     RTC_C->PS1CTL   = 0b11010;
 
-<<<<<<< HEAD
-    RTC_C->AMINHR   = 10<<8 | 5 | BIT(15) | BIT(7);
-=======
     RTC_C->AMINHR   = alarm.hour<<8 | alarm.min | BIT(15) | BIT(7);
->>>>>>> branch 'master' of https://github.com/EGR226GOATGROUP/FINAL-PROJECT.git
 
     RTC_C->CTL0     = ((0xA500) | BIT5);
     NVIC_EnableIRQ(RTC_C_IRQn);
@@ -796,6 +790,6 @@ void sysTickDelay_us(int microsec) //timer microseconds
 }
 
 
-//
-//
+
+
 
