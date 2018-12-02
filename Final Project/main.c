@@ -360,7 +360,6 @@ void ADC14_IRQHandler(void)
             voltage = raw*(3.3/16383);
             tempC  = (1000*voltage - 500)/10;
             tempF = ((tempC*9.0)/5.0)+32.0;
-            tempK = tempC+273.15;
 
             sprintf(tempAr,"%.1f",tempF);                   //displays temperature
             displayAt(tempAr,1,4);
