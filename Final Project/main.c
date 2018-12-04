@@ -127,6 +127,7 @@ void main(void)
     ADC14init();
     LED_init();
     intLCDBrightness();
+    intSpeedButton();
 
     commandWrite(CLEAR);
 
@@ -137,7 +138,7 @@ void main(void)
     P1->OUT &= ~BIT0;
     TIMER_A0->CCR[4] = 1000;         //sets LCD brightness CCR[0] set to 1000 CCR[4]/CCR[0]*100 gives brightness percentage
     __enable_interrupt();
-    configRTC(12, 30);
+    configRTC(12, 55);
 
     lightsOn = 1;
 
@@ -172,7 +173,6 @@ void toggleAlarm()
 
 void displayAlarm()
 {
-
     if(alarm.hour<10)
     {
         sprintf(time," %d",alarm.hour);
@@ -275,11 +275,13 @@ void PORT1_IRQHandler()
     if(P1->IFG & BIT1)
     {
         speed = HIGH;
+        P1->OUT |= BIT0;
         P1->IFG &= ~BIT1;
     }
     else if(P1->IFG & BIT4)
     {
         speed = LOW;
+        P1->OUT &= ~BIT0;
         P1->IFG &= ~BIT4;
     }
 }
@@ -417,12 +419,24 @@ void RTC_C_IRQHandler(void)
 {
     if(RTC_C->PS1CTL & BIT0)
     {
-        now.sec         =   RTC_C->TIM0>>0 & 0x00FF;
-        now.min         =   RTC_C->TIM0>>8 & 0x00FF;
-        now.hour        =   RTC_C->TIM1>>0 & 0x00FF;
-        if(speed==HIGH)
+        if(speed != HIGH)
         {
-            RTC_C->TIM0 = (RTC_C->TIM0 & 0x00FF)<<8;
+            now.sec         =   RTC_C->TIM0>>0 & 0x00FF;
+            now.min         =   RTC_C->TIM0>>8 & 0x00FF;
+            now.hour        =   RTC_C->TIM1>>0 & 0x00FF;
+        }
+
+        else if(speed == HIGH)
+        {
+            now.sec =0;
+            now.min++;
+            if(now.min==60)
+            {
+                now.min = 0;
+                now.hour++;
+            }
+            RTC_C->TIM0 = now.min<<8 | 00;
+            RTC_C->TIM1  = now.hour;
         }
         if(now.hour > 12) //rolls over time for 12-hour time
         {
