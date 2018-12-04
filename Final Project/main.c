@@ -41,6 +41,8 @@
  *
  */
 
+//todo when in 1 min of alarm change back to reg time
+
 #define __SYSTEM_CLOCK 3000000
 
 #include "msp.h"
@@ -161,14 +163,17 @@ void toggleAlarm()
 {
     if(alarmFlag)
     {
-        alarmFlag=0;
-        displayAt("OFF",10,3);
+        alarmFlag=0;                                                        //toggles the alarm falg
+        displayAt("OFF",10,3);                                              //Displays Alarm: OFF
+        RTC_C->CTL0     = ((0xA500) & ~BIT5);                               //Alrm Disabled
     }
 
     else
     {
-        alarmFlag=1;
-        displayAt("ON ",10,3);
+        alarmFlag=1;                                                        //togles the alarm flag
+        displayAt("ON ",10,3);                                              //Displays Alarm: On
+        RTC_C->CTL0     = ((0xA500) | BIT5);                                //Alarm Enabled
+        RTC_C->AMINHR   = alarm.hour<<8 | alarm.min | BIT(15) | BIT(7);     //Sets Alarm Time
     }
 }
 
@@ -188,8 +193,6 @@ void displayAlarm()
 
     sprintf(time,"%.2d",alarm.min);
     displayAt(time,6,2);
-
-    RTC_C->AMINHR   = alarm.hour<<8 | alarm.min | BIT(15) | BIT(7);
 }
 
 void toggleAMPM2()
@@ -643,7 +646,7 @@ void configRTC(int hour, int min)
     RTC_C->AMINHR   = alarm.hour<<8 | alarm.min | BIT(15) | BIT(7);
 
 
-    RTC_C->CTL0     = ((0xA500) | BIT5);                //enales the alarm
+    //RTC_C->CTL0     = ((0xA500) | BIT5);                //enales the alarm
     NVIC_EnableIRQ(RTC_C_IRQn);
 }
 
