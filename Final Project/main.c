@@ -101,6 +101,13 @@ float LCDbrightness = 50;
 int blinkFlag = 0;
 
 // global struct variable called now
+
+//todo alarm status
+//todo stop 1 min before
+//todo alarm snooze
+//todo actualy toggle alarm
+//todo snooze
+
 struct
 {
     uint8_t sec;
@@ -141,7 +148,7 @@ void main(void)
     P1->OUT &= ~BIT0;
     TIMER_A0->CCR[4] = 1000;
     __enable_interrupt();
-    configRTC(5, 59);
+    configRTC(6, 59);
 
     lightsOn = 1;
 
@@ -161,18 +168,16 @@ void wakeUpLights(void)
 
 void toggleAlarm()
 {
-    if(alarmFlag)
+    if(alarmFlag==1)
     {
         alarmFlag=0;                                                        //toggles the alarm falg
         displayAt("OFF",10,3);                                              //Displays Alarm: OFF
-        RTC_C->CTL0     = ((0xA500) & ~BIT5);                               //Alrm Disabled
     }
 
     else
     {
         alarmFlag=1;                                                        //togles the alarm flag
         displayAt("ON ",10,3);                                              //Displays Alarm: On
-        RTC_C->CTL0     = ((0xA500) | BIT5);                                //Alarm Enabled
         RTC_C->AMINHR   = alarm.hour<<8 | alarm.min | BIT(15) | BIT(7);     //Sets Alarm Time
     }
 }
@@ -221,12 +226,12 @@ void displayAMPM()
 {
     if(AMPM)                                        //prints AM or PM based on flag variable
     {
-        sprintf(time,"PM");
+        sprintf(time,"AM");
         displayAt(time,12,1);
     }
     else if(!AMPM)
     {
-        sprintf(time,"AM");
+        sprintf(time,"PM");
         displayAt(time,12,1);
     }
 }
@@ -281,13 +286,11 @@ void PORT1_IRQHandler()
     if(P1->IFG & BIT1)
     {
         speed = HIGH;
-        //P1->OUT |= BIT0;                //todo debug led
         P1->IFG &= ~BIT1;
     }
     else if(P1->IFG & BIT4)
     {
         speed = LOW;
-        //P1->OUT &= ~BIT0;               //todo debug led
         P1->IFG &= ~BIT4;
     }
 }
@@ -470,9 +473,13 @@ void RTC_C_IRQHandler(void)
 
         displayAMPM();
 
+
         if(RTC_C->CTL0 & BIT1)              //todo
         {
-            P1->OUT |= BIT0;            //this is what happens when alarm goes off
+            if((alarmFlag==1)&(AMPM==AMPM2))
+            {
+                P1->OUT ^= BIT0;            //this is what happens when alarm goes off
+            }
             RTC_C->CTL0 = 0xA500;
         }
     }
@@ -638,7 +645,7 @@ void configRTC(int hour, int min)
 {
     RTC_C->CTL0     =   0xA500;     //Write Code, IE on RTC Ready
     RTC_C->CTL13    =   0x0000;
-    RTC_C->TIM0     = min<<8 | 30;
+    RTC_C->TIM0     = min<<8 | 50;
     RTC_C->TIM1     = hour;
 
     RTC_C->PS1CTL   = 0b11010;
