@@ -41,7 +41,7 @@
  *
  */
 
-//Nolan Test From Laptop
+#define __SYSTEM_CLOCK 3000000
 
 #include "msp.h"
 #include <stdio.h>
@@ -138,7 +138,7 @@ void main(void)
     P1->OUT &= ~BIT0;
     TIMER_A0->CCR[4] = 1000;         //sets LCD brightness CCR[0] set to 1000 CCR[4]/CCR[0]*100 gives brightness percentage
     __enable_interrupt();
-    configRTC(12, 55);
+    configRTC(5, 59);
 
     lightsOn = 1;
 
@@ -275,13 +275,13 @@ void PORT1_IRQHandler()
     if(P1->IFG & BIT1)
     {
         speed = HIGH;
-        P1->OUT |= BIT0;
+        //P1->OUT |= BIT0;                //todo debug led
         P1->IFG &= ~BIT1;
     }
     else if(P1->IFG & BIT4)
     {
         speed = LOW;
-        P1->OUT &= ~BIT0;
+        //P1->OUT &= ~BIT0;               //todo debug led
         P1->IFG &= ~BIT4;
     }
 }
@@ -425,7 +425,6 @@ void RTC_C_IRQHandler(void)
             now.min         =   RTC_C->TIM0>>8 & 0x00FF;
             now.hour        =   RTC_C->TIM1>>0 & 0x00FF;
         }
-
         else if(speed == HIGH)
         {
             now.sec =0;
@@ -438,6 +437,7 @@ void RTC_C_IRQHandler(void)
             RTC_C->TIM0 = now.min<<8 | 00;
             RTC_C->TIM1  = now.hour;
         }
+
         if(now.hour > 12) //rolls over time for 12-hour time
         {
             now.hour = 1;
