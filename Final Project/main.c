@@ -464,7 +464,8 @@ void RTC_C_IRQHandler(void)
 
         displayAMPM();
 
-        if(RTC_C->CTL0 & BIT1) {
+        if(RTC_C->CTL0 & BIT1)              //todo
+        {
             P1->OUT |= BIT0;            //this is what happens when alarm goes off
             RTC_C->CTL0 = 0xA500;
         }
@@ -627,6 +628,7 @@ void configRTC(int hour, int min)
     RTC_C->PS1CTL   = 0b11010;
 
     RTC_C->AMINHR   = alarm.hour<<8 | alarm.min | BIT(15) | BIT(7);
+
 
 
     RTC_C->CTL0     = ((0xA500) | BIT5);
