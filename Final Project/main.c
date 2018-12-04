@@ -55,12 +55,15 @@
 #define SETALARM BIT2
 #define SNOOZE BIT3
 #define DOWN BIT3
+#define LOW 0
+#define HIGH 1
 
 void configRTC(int hour, int min);
 void ADC14init(void);
 void tempT32interrupt(void);
 void intButtons();
 void intAlarm();
+void intSpeedButton();
 
 void displayAMPM();
 void toggleAMPM();
@@ -88,7 +91,7 @@ void intBlinkTimerA(void);
 
 float tempC=0,tempF = 0, voltage = 0, raw = 0;
 char time[2],tempAr[3];
-int RTC_flag =0, timePresses=0, alarmFlag=0, alarmPresses=0;
+int RTC_flag =0, timePresses=0, alarmFlag=0, alarmPresses=0, speed=0;
 int AMPM = 1, AMPM2=1;                       //flag to determine AM or PM will be used more for UART functionality to convert 24 hr to 12 hr time
 int lightsOn = 0;                   //flag to be used to check if the wake up lights should be turned on
 int lightBrightness = 0;
@@ -108,7 +111,7 @@ struct
     uint8_t hour;
 } alarm;
 
-//-----------------------------------------MAIN----------------------------------------------------
+//-------------------------------------------------MAIN---------------------------------------------------------------
 
 void main(void)
 {
@@ -267,6 +270,20 @@ void T32_INT2_IRQHandler()                          //Interrupt Handler for Time
     }
 }
 
+void PORT1_IRQHandler()
+{
+    if(P1->IFG & BIT1)
+    {
+        speed = HIGH;
+        P1->IFG &= ~BIT1;
+    }
+    else if(P1->IFG & BIT4)
+    {
+        speed = LOW;
+        P1->IFG &= ~BIT4;
+    }
+}
+
 void PORT4_IRQHandler()
 {
     //SetTime Button Press
@@ -403,6 +420,10 @@ void RTC_C_IRQHandler(void)
         now.sec         =   RTC_C->TIM0>>0 & 0x00FF;
         now.min         =   RTC_C->TIM0>>8 & 0x00FF;
         now.hour        =   RTC_C->TIM1>>0 & 0x00FF;
+        if(speed==HIGH)
+        {
+            RTC_C->TIM0 = (RTC_C->TIM0 & 0x00FF)<<8;
+        }
         if(now.hour > 12) //rolls over time for 12-hour time
         {
             now.hour = 1;
@@ -459,10 +480,7 @@ void ADC14_IRQHandler(void)
             dataWrite(0b11011111);                          //prints degrees symbol
             commandWrite(222);                              //moves cursor to fahrenheit spot
             dataWrite(0b01000011);                          //prints an c
-
-
     }
-
 }
 
 void TA3_N_IRQHandler()
@@ -557,6 +575,19 @@ void intAlarm()
     displayAt("Alarm: OFF",3,3);
     alarm.hour = 6;
     alarm.min = 0;
+}
+
+void intSpeedButton()
+{
+    P1->SEL0 &= ~(BIT1|BIT4);
+    P1->SEL1 &= ~(BIT1|BIT4);
+    P1->DIR  &= ~(BIT1|BIT4);
+    P1->REN  |=  (BIT1|BIT4);
+    P1->OUT  |=  (BIT1|BIT4);
+    P1->IE   |=  (BIT1|BIT4);
+    P1->IES  |=  (BIT1|BIT4);
+
+    NVIC_EnableIRQ(PORT1_IRQn);
 }
 
 void intButtons()
