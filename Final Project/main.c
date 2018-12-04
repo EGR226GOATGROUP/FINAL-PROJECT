@@ -36,8 +36,8 @@
  * Commit and Push
  * If there is error -> Pull
  * Save the main.c (Git Repository)
- *
- *
+ * Make change to save again
+ * Commit and Push again
  *
  */
 
@@ -89,12 +89,13 @@ void LEDT32interrupt(void);
 void intLCDBrightness(void);
 void intBlinkTimerA(void);
 
-float tempC=0,tempF = 0, voltage = 0, raw = 0;
+float tempC=0,tempF = 0, voltage = 0, raw = 0,raw1 = 0,voltage1 = 0;
 char time[2],tempAr[3];
 int RTC_flag =0, timePresses=0, alarmFlag=0, alarmPresses=0, speed=0;
 int AMPM = 1, AMPM2=1;                       //flag to determine AM or PM will be used more for UART functionality to convert 24 hr to 12 hr time
 int lightsOn = 0;                   //flag to be used to check if the wake up lights should be turned on
 int lightBrightness = 0;
+float LCDbrightness = 50;
 int blinkFlag = 0;
 
 // global struct variable called now
@@ -136,7 +137,7 @@ void main(void)
     P1->SEL1 &= ~BIT0;
     P1->DIR |= BIT0;
     P1->OUT &= ~BIT0;
-    TIMER_A0->CCR[4] = 1000;         //sets LCD brightness CCR[0] set to 1000 CCR[4]/CCR[0]*100 gives brightness percentage
+    TIMER_A0->CCR[4] = 1000;
     __enable_interrupt();
     configRTC(5, 59);
 
@@ -187,6 +188,8 @@ void displayAlarm()
 
     sprintf(time,"%.2d",alarm.min);
     displayAt(time,6,2);
+
+    RTC_C->AMINHR   = alarm.hour<<8 | alarm.min | BIT(15) | BIT(7);
 }
 
 void toggleAMPM2()
@@ -496,6 +499,15 @@ void ADC14_IRQHandler(void)
             commandWrite(222);                              //moves cursor to fahrenheit spot
             dataWrite(0b01000011);                          //prints an c
     }
+    if(ADC14->IFGR0 & BIT1)
+    {
+        raw1 = ADC14->MEM[1];
+        voltage1 = raw1*(3.3/16383);
+        TIMER_A0->CCR[4] = voltage1*303;
+        ADC14->CLRIFGR0 &=  ~BIT1;                  // Clear MEM1 interrupt flag
+    }
+    ADC14->CLRIFGR1     &=    ~0b1111110;
+
 }
 
 void TA3_N_IRQHandler()
@@ -586,9 +598,10 @@ void intLCDBrightness(void)
 }
 void intAlarm()
 {
-    displayAt("6:00  AM",4,2);
-    displayAt("Alarm: OFF",3,3);
-    alarm.hour = 6;
+    displayAt("7:00  AM",4,2);
+    displayAt("Alarm: ON ",3,3);
+    alarmFlag=1;
+    alarm.hour = 7;
     alarm.min = 0;
 }
 
@@ -622,7 +635,7 @@ void configRTC(int hour, int min)
 {
     RTC_C->CTL0     =   0xA500;     //Write Code, IE on RTC Ready
     RTC_C->CTL13    =   0x0000;
-    RTC_C->TIM0     = min<<8 | 00;
+    RTC_C->TIM0     = min<<8 | 30;
     RTC_C->TIM1     = hour;
 
     RTC_C->PS1CTL   = 0b11010;
@@ -630,17 +643,15 @@ void configRTC(int hour, int min)
     RTC_C->AMINHR   = alarm.hour<<8 | alarm.min | BIT(15) | BIT(7);
 
 
-
-    RTC_C->CTL0     = ((0xA500) | BIT5);
+    RTC_C->CTL0     = ((0xA500) | BIT5);                //enales the alarm
     NVIC_EnableIRQ(RTC_C_IRQn);
 }
 
 void ADC14init(void)
 {
     //For Analog Input 8
-    P5->SEL0            |=   BIT5;                      // Select ADC Operation
-    P5->SEL1            |=   BIT5;                      // SEL = 11 sets to ADC operation
-    P5->DIR             &=  ~BIT5;
+    P5->SEL0            |=   (BIT5|BIT4);                      // Select ADC Operation
+    P5->SEL1            |=   (BIT5|BIT4);                      // SEL = 11 sets to ADC operation
     ADC14->CTL0         =    0;                         // Disable ADC for setup
 
     // CTL0 Configuration
@@ -651,18 +662,19 @@ void ADC14init(void)
     // 11-8  = 0011 for 32 clk sample and hold time
     // 7     = 1    for multiple ADC channels being read
     // 4     = 1    to turn on ADC
-    ADC14->CTL0         =    0b10000100001000000000001100010000;
+    ADC14->CTL0         =    0b10000100001000100000001110010000;
 
     ADC14->CTL1         =    (BIT5 | BIT4);         // Bits 5 and 4 = 11 to enable 14 bit conversion
                                                         // Bit 23 turns on Temperature Sensor
     ADC14->MCTL[0]      =    0;                         // A0 on P5.5
+    ADC14->MCTL[1]      =    1| BIT7;
                                                         // BIT7 says to stop converting after this ADC.
-    ADC14->IER0         |=   BIT0;            // Interrupt on conversion
+    ADC14->IER0         |=   (BIT0 | BIT1);            // Interrupt on conversion
 //    REF_A->CTL0         |=   BIT0;                      // Turns on the Reference for the Temperature Sensor
 //    REF_A->CTL0         &=   ~BIT3;                     // Turns off the Temperature Sensor Disable
 
     ADC14->CTL0         |=   0b10;                      // Enable Conversion
-  NVIC_EnableIRQ(ADC14_IRQn);             // Turn on ADC Interrupts in NVIC.  Equivalent to "NVIC_EnableIRQ(ADC14_IRQn);"
+    NVIC->ISER[0]       |=   1<<ADC14_IRQn;
 }
 
 void tempT32interrupt(void)
@@ -836,4 +848,8 @@ void sysTickDelay_us(int microsec) //timer microseconds
     SysTick->VAL = 0;
     while((SysTick->CTRL & BIT(16))==0);
 }
+
+
+
+
 
