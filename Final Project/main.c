@@ -73,6 +73,10 @@ void displayHour();
 void toggleAlarm();
 void displayAlarm();
 void toggleAMPM2();
+void wakeUpLights(void);
+void LEDT32interrupt(void);
+void intLCDBrightness(void);
+void intBlinkTimerA(void);
 
 
 void displayAt(char text[], int place, int line);
@@ -86,10 +90,7 @@ void sysTickDelay_ms(int ms);
 void sysTickDelay_us(int microsec);
 void SysTick_Init();
 void LED_init(void);
-void wakeUpLights(void);
-void LEDT32interrupt(void);
-void intLCDBrightness(void);
-void intBlinkTimerA(void);
+
 
 float tempC=0,tempF = 0, voltage = 0, raw = 0,raw1 = 0,voltage1 = 0;
 char time[2],tempAr[3];
@@ -325,8 +326,9 @@ void PORT4_IRQHandler()
         {
             now.hour++;
             if(now.hour>12)                                //hour Rolls Over
-            {
                 now.hour=1;
+            else if(now.hour==12)
+            {
                 toggleAMPM();
                 displayAMPM();
             }
@@ -343,10 +345,9 @@ void PORT4_IRQHandler()
         {
             alarm.hour++;
             if(alarm.hour>12)
-            {
                 alarm.hour=1;
+            else if(alarm.hour==12)
                 toggleAMPM2();
-            }
             displayAlarm();
         }
         else if(alarmPresses==2)
@@ -385,8 +386,9 @@ void PORT4_IRQHandler()
         {
             now.hour--;
             if(now.hour<1)                                //hour Rolls Over
-            {
                 now.hour=12;
+            if(now.hour==11)
+            {
                 toggleAMPM();
                 displayAMPM();
             }
@@ -404,10 +406,9 @@ void PORT4_IRQHandler()
         {
             alarm.hour--;
             if(alarm.hour==0)
-            {
                 alarm.hour=12;
+            else if(alarm.hour==11)
                 toggleAMPM2();
-            }
             displayAlarm();
         }
         else if(alarmPresses==2)
@@ -427,9 +428,10 @@ void PORT4_IRQHandler()
 void RTC_C_IRQHandler(void)
 {
     if(RTC_C->PS1CTL & BIT0)
-    {
-        if(speed != HIGH)
-        {
+    {//     speed is low        alarm is off                middle of hour
+        if((speed != HIGH) | (((alarm.hour==now.hour)&((alarm.min-now.min)==1)&(AMPM==AMPM2)) |
+                (((alarm.hour-now.hour)==1)&(now.min==59)&(AMPM==AMPM2)&(alarm.min==0)) | (((now.hour==12)&(alarm.hour==1))&(AMPM!=AMPM2)&(now.min==59)))&(alarmFlag==1))
+        {           //change of hour                                                changing from AMPM
             now.sec         =   RTC_C->TIM0>>0 & 0x00FF;
             now.min         =   RTC_C->TIM0>>8 & 0x00FF;
             now.hour        =   RTC_C->TIM1>>0 & 0x00FF;
