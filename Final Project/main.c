@@ -496,7 +496,6 @@ void ADC14_IRQHandler(void)
             commandWrite(222);                              //moves cursor to fahrenheit spot
             dataWrite(0b01000011);                          //prints an c
     }
-<<<<<<< HEAD
     if(ADC14->IFGR0 & BIT1)
     {
         raw1 = ADC14->MEM[1];
@@ -506,8 +505,6 @@ void ADC14_IRQHandler(void)
     }
     ADC14->CLRIFGR1     &=    ~0b1111110;
 
-=======
->>>>>>> branch 'master' of https://github.com/EGR226GOATGROUP/FINAL-PROJECT.git
 }
 
 void TA3_N_IRQHandler()
