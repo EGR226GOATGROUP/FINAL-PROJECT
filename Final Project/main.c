@@ -479,7 +479,7 @@ void PORT4_IRQHandler()
     //SetTime Button Press
     if(P4->IFG & SETTIME)
     {
-        if(alarmSoundFlag != 0)
+        if(alarmSoundFlag == 0)
         {
             if((timePresses==0) & (alarmPresses==0))                                  //First press -> Go into time Hours edit
             {
@@ -499,6 +499,7 @@ void PORT4_IRQHandler()
         P4->IFG &= ~SETTIME;
     }
 
+    //(alarmFlag==1)&(timePresses==0)&(alarmSoundFlag==0)
     //Alarm toggle/Up Button Press
     if(P4->IFG & (ALARM|UP))
     {
@@ -507,7 +508,7 @@ void PORT4_IRQHandler()
             resetNeeded=1;
             alarmFlag=0;
         }
-        else if(alarmSoundFlag == 0)
+        else if(!alarmSoundFlag)
         {
             if(timePresses==1)                              //Incoment Hours
             {
@@ -566,7 +567,7 @@ void PORT4_IRQHandler()
     //SetAlarm Button Press
     if(P4->IFG & SETALARM)                              //SetAlarm Button Press
     {
-        if(alarmSoundFlag != 0)
+        if(alarmSoundFlag == 0)
         {
             if(timePresses==0)
             {
