@@ -357,7 +357,6 @@ void extractTimeSerial(char string[])
             writeOutput("INVALID ");
         }
     }
-<<<<<<< HEAD
     else{
         configRTC(now.hour, now.min,now.sec);
         AMPM = 1;
@@ -369,8 +368,6 @@ void extractTimeSerial(char string[])
    // printf("%d\t%d\n",now.hour,now.min);
 
 
-=======
->>>>>>> branch 'master' of https://github.com/EGR226GOATGROUP/FINAL-PROJECT.git
 }
 
 void wakeUpLights(void)
