@@ -627,7 +627,7 @@ void PORT4_IRQHandler()
         else if(alarmSoundFlag)     //alarm is on and snooze is pressed
         {
             displayAt("IO",0,2);
-            //todo here is where we need to extend the time
+
             alarm.min = alarm.min + 10;
             if(alarm.min>59)
             {
