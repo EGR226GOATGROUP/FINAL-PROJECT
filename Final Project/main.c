@@ -151,7 +151,7 @@ void main(void)
     //Initilizing Interupts
     __disable_interrupt();
     char string[BUFFER_SIZE]; // Creates local char array to store incoming serial commands
-    intButtons();
+
     SysTick_Init();                                 //initializes timer
     tempT32interrupt();
     LEDT32interrupt();
@@ -171,6 +171,7 @@ void main(void)
     P1->DIR |= BIT0;
     P1->OUT &= ~BIT0;
     TIMER_A0->CCR[4] = 1000;
+    intButtons();
     __enable_interrupt();
     configRTC(6, 59,55);
 
