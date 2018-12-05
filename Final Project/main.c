@@ -847,4 +847,59 @@ void sysTickDelay_us(int microsec) //timer microseconds
 
 
 
+//#include "msp.h"
+//#include <stdio.h>
+//#include <string.h>
+//void initTASpeaker(void);
+//
+//void SysTick_Init(void) //initializes systick timer
+//{
+//    SysTick->CTRL = 0;
+//    SysTick->LOAD = 0x00FFFFFF; //sets max value
+//    SysTick->VAL = 0; //sets min value
+//    SysTick->CTRL = 0x00000005; //enables timer
+//}
+//
+//void sysTickDelay_ms(int ms) //timer ms
+//{
+//    SysTick->LOAD = ((ms*3000)-1);
+//    SysTick->VAL = 0;
+//    while((SysTick->CTRL & BIT(16))==0);
+//}
+//
+//
+//void main(void)
+//{
+//    WDT_A->CTL = WDT_A_CTL_PW | WDT_A_CTL_HOLD;     // stop watchdog timer
+//    initTASpeaker();
+//    SysTick_Init();
+//    while(1)
+//    {
+//        TIMER_A0->CCR[0] = 6000;  //Math in an interrupt is bad behavior, but shows how things are happening.  This takes our clock and divides by the frequency of this note to get the period.
+//        TIMER_A0->CCR[2] = 3000;  //50% duty cycle
+//        sysTickDelay_ms(1000);
+//        TIMER_A0->CCR[2] = 0;
+//        sysTickDelay_ms(1000);
+//    }
+//}
+//
+//void initTASpeaker(void)
+//{
+//    P2->SEL0 |= BIT5;
+//    P2->SEL1 &= BIT5;
+//    P2->DIR |= BIT5;
+//    TIMER_A0->CCR[0] = 0;                           // Turn off timerA to start
+//    TIMER_A0->CCTL[2] = 0b11100000;         // Setup Timer A0_2 Reset/Set, Interrupt, No Output
+//    TIMER_A0->CCR[2] = 0;                           // Turn off timerA to start
+//    TIMER_A0->CTL = 0b1000010100;             // Count Up mode using SMCLK, Clears, Clear Interrupt Flag
+//}
+
+
+
+
+
+
+
+
+
 
