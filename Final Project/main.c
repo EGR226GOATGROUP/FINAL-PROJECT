@@ -310,70 +310,11 @@ void extractTimeSerial(char string[])
                     RTC_C->AMINHR   = alarm.hour<<8 | alarm.min | BIT(15) | BIT(7);     //Sets Alarm Time
                 }
             }
-<<<<<<< HEAD
-=======
             else
             {
                 writeOutput("INVALID ");
             }
-        }
-        else
-        {
-            writeOutput(" INVALID ");
-        }
 
-
-    }
-    else if(state == SETALARMSERIAL)
-    {
-        alarm.hour = (array2[0][0]-48)*10+(array2[0][1]-48);
-        alarm.min = (array2[1][0]-48)*10+(array2[1][1]-48);
-        printf("\n%d\t%d\n",alarm.hour,alarm.min);
-        if((alarm.min > 0) & (alarm.min < 60))
-        {
-
-            if((alarm.hour > 12) & (alarm.hour < 24))
-            {
-                AMPM2 = 0;
-                alarm.hour -= 12;
-                displayAt("PM",10,2);
-                displayAlarm();
-                RTC_C->AMINHR   = alarm.hour<<8 | alarm.min | BIT(15) | BIT(7);     //Sets Alarm Time
-                writeOutput("VALID ");
-            }
-            else if((alarm.hour < 12) & (alarm.hour > 0))
-            {
-                displayAt("AM",10,2);
-                displayAlarm();
-                AMPM2 = 1;
-                RTC_C->AMINHR   = alarm.hour<<8 | alarm.min | BIT(15) | BIT(7);     //Sets Alarm Time
-                writeOutput("VALID ");
-            }
-            else
-            {
-                writeOutput("INVALID ");
-            }
-         }
-        else
-        {
-            writeOutput("INVALID ");
-        }
-    }
-    else{
-        configRTC(now.hour, now.min,now.sec);
-        AMPM = 1;
-        displayAMPM();
-    }
-<<<<<<< HEAD
-
-
-
-   // printf("%d\t%d\n",now.hour,now.min);
-
-
->>>>>>> branch 'master' of https://github.com/EGR226GOATGROUP/FINAL-PROJECT.git
-=======
->>>>>>> branch 'master' of https://github.com/EGR226GOATGROUP/FINAL-PROJECT.git
 }
 
 void wakeUpLights(void)
@@ -989,16 +930,16 @@ void setupSerial()
     P1->SEL1 &= ~(BIT2 | BIT3); // and TX respectively.
 
     EUSCI_A0->CTLW0  = BIT0; // Disables EUSCI. Default configuration is 8N1
-    EUSCI_A0->CTLW0 |= (BIT7|BIT(14)|BIT(15)); // Connects to SMCLK BIT[7:6] = 10, BIT14 = none
-    EUSCI_A0->CTLW0 &= ~(BIT(11));  //BIT15 = Parity, BIT11 = one Stop Bit
+    EUSCI_A0->CTLW0 |= BIT7; // Connects to SMCLK BIT[7:6] = 10, BIT14 = none
+    EUSCI_A0->CTLW0 &=  ~(BIT(15)|BIT(14)|BIT(11));  //BIT15 = Parity, BIT11 = one Stop Bit
     // Baud Rate Configuration
     // 3000000/(16*9600) = 19.531  (3 MHz at 9600 bps is fast enough to turn on over sampling (UCOS = /16))
     // UCOS16 = 1 (0ver sampling, /16 turned on)
     // UCBR  = 19 (Whole portion of the divide)
     // UCBRF = .531 * 16 = 8 (0x08) (Remainder of the divide)
     // UCBRS = 3000000/9600 remainder=0.5 -> 0xAA (look up table 22-4)
-    EUSCI_A0->BRW = 1;  // UCBR Value from above
-    EUSCI_A0->MCTLW = 0x01A1; //UCBRS (Bits 15-8) & UCBRF (Bits 7-4) & UCOS16 (Bit 0)
+    EUSCI_A0->BRW = 19;  // UCBR Value from above
+    EUSCI_A0->MCTLW = 0xAA81; //UCBRS (Bits 15-8) & UCBRF (Bits 7-4) & UCOS16 (Bit 0)
 
     EUSCI_A0->CTLW0 &= ~BIT0;  // Enable EUSCI
     EUSCI_A0->IFG &= ~BIT0;    // Clear interrupt
