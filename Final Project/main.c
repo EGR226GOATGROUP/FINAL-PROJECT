@@ -39,6 +39,11 @@
  * Make change to save again
  * Commit and Push again
  *
+ * SET UART TO
+ * BAUD: 115200
+ * PARITY: EVEN
+ * STOP: 1 BIT
+ *
  */
 
 //todo when in 1 min of alarm change back to reg time
@@ -78,6 +83,7 @@ void intSpeedButton();
 void displayAMPM();
 void toggleAMPM();
 void displayHour();
+void displayMin();
 void toggleAlarm();
 void displayAlarm();
 void toggleAMPM2();
@@ -151,7 +157,7 @@ void main(void)
     //Initilizing Interupts
     __disable_interrupt();
     char string[BUFFER_SIZE]; // Creates local char array to store incoming serial commands
-
+    intButtons();
     SysTick_Init();                                 //initializes timer
     tempT32interrupt();
     LEDT32interrupt();
@@ -171,21 +177,20 @@ void main(void)
     P1->DIR |= BIT0;
     P1->OUT &= ~BIT0;
     TIMER_A0->CCR[4] = 1000;
-    intButtons();
+
     __enable_interrupt();
     configRTC(6, 59,55);
 
     lightsOn = 1;
 int tempHour = 0,tempHourA;
-
+timePresses=0;
     while(1)
     {
         tempHour = now.hour;
         tempHourA = alarm.hour;
         readInput(string); // Read the input up to \n, store in string.  This function doesn't return until \n is received
         if(string[0] != '\0'){ // if string is not empty, check the inputted data.
-            if(1)
-            {
+
                 if(!strncmp(string,"SETTIME ",8))
                 {
                     state = SETTIMESERIAL;
@@ -206,11 +211,7 @@ int tempHour = 0,tempHourA;
                {
                    state = INVALID;
                }
-            }
-            else
-           {
-               state = INVALID;
-           }
+
             switch(state) //state machine to account for each light being turned on
             {
             case SETTIMESERIAL:
@@ -222,13 +223,13 @@ int tempHour = 0,tempHourA;
 
             case READTIME:
                 tempHour = now.hour;
-                if(tempHour>12)
+                if(!AMPM)
                 {
-                   tempHour -= 12;
+                   tempHour += 12;
                    sprintf(string,"%.2d:%.2d:%.2d",tempHour,now.min,now.sec);
                    writeOutput(string);
                 }
-                else if(tempHour <=12)
+                else if(AMPM)
                 {
                     sprintf(string,"%.2d:%.2d:%.2d",tempHour,now.min,now.sec);
                     writeOutput(string);
@@ -236,13 +237,13 @@ int tempHour = 0,tempHourA;
                 break;
             case READALARM:
                 tempHourA = alarm.hour;
-                if(tempHourA>12)
+                if(!AMPM2)
                 {
-                   tempHourA = 12;
+                   tempHourA += 12;
                    sprintf(string,"%.2d:%.2d",tempHourA,alarm.min);
                    writeOutput(string);
                 }
-                else if(tempHourA <=12)
+                else if(AMPM2)
                 {
                     sprintf(string,"%.2d:%.2d",tempHourA,alarm.min);
                     writeOutput(string);
@@ -264,99 +265,46 @@ int tempHour = 0,tempHourA;
 void extractTimeSerial(char string[])
 {   writeOutput("Command Sent: ");
     writeOutput(string);
-    int q = 0;
-    char *p = strtok (string, " ");
-
-    char *array[10], *array2[10];
 
 
-    while (p != NULL)
-    {
-        array[q++] = p;
-        p = strtok (NULL, " ");
-    }
-    q=0;
-    char *r = strtok(array[1],":");
-    while (r != NULL)
-    {
-        array2[q++] = r;
-        r = strtok (NULL, ":");
-    }
-    if(state == SETTIMESERIAL)
-    {
-        now.hour = (array2[0][0]-48)*10+(array2[0][1]-48);
-        now.min = (array2[1][0]-48)*10+(array2[1][1]-48);
-        now.sec = (array2[2][0]-48)*10+(array2[2][1]-48);
-        if((now.sec > 0) & (now.sec < 60))
-        {
-            if((now.min > 0) & (now.min < 60))
+            if(state == SETTIMESERIAL)
             {
-                if((now.hour > 12) & (now.hour < 24))
+                now.hour = ((int)string[8]-'0')*10+((int)string[9]-'0');
+                now.min = ((int)string[11]-'0')*10+((int)string[12]-'0');
+                now.sec = ((int)string[14]-'0')*10+((int)string[15]-'0');
+                if(now.hour>12)
                 {
-                    now.hour -= 12;
+                    now.hour-=12;
                     AMPM = 0;
                     displayAMPM();
-                    configRTC(now.hour, now.min,now.sec);
-                    writeOutput("VALID ");
                 }
-                else if ((now.hour > 0) & (now.hour < 13)){
-                    configRTC(now.hour, now.min,now.sec);
+                else if(now.hour<=12)
+                {
                     AMPM = 1;
                     displayAMPM();
-                    writeOutput("VALID ");
                 }
-                else
+                configRTC(now.hour, now.min,now.sec);
+            }
+            else if(state == SETALARMSERIAL)
+            {
+                alarm.hour = ((int)string[9]-'0')*10+((int)string[10]-'0');
+                alarm.min = ((int)string[12]-'0')*10+((int)string[13]-'0');
+                if(alarm.hour>12)
                 {
-                    writeOutput("INVALID ");
+                    alarm.hour-=12;
+                    AMPM2 = 0;
+                    displayAlarm();
+                    displayAt("PM",10,2);
+                    RTC_C->AMINHR   = alarm.hour<<8 | alarm.min | BIT(15) | BIT(7);     //Sets Alarm Time
+                }
+                else if(alarm.hour<=12)
+                {
+                    AMPM2 = 1;
+                    displayAlarm();
+                    displayAt("AM",10,2);
+                    RTC_C->AMINHR   = alarm.hour<<8 | alarm.min | BIT(15) | BIT(7);     //Sets Alarm Time
                 }
             }
-            else
-            {
-                writeOutput("INVALID ");
-            }
-        }
-        else
-        {
-            writeOutput(" INVALID ");
-        }
-
-
-    }
-    else if(state == SETALARMSERIAL)
-    {
-        alarm.hour = (array2[0][0]-48)*10+(array2[0][1]-48);
-        alarm.min = (array2[1][0]-48)*10+(array2[1][1]-48);
-        printf("\n%d\t%d\n",alarm.hour,alarm.min);
-        if((alarm.min > 0) & (alarm.min < 60))
-        {
-
-            if((alarm.hour > 12) & (alarm.hour < 24))
-            {
-                AMPM2 = 0;
-                alarm.hour -= 12;
-                displayAt("PM",10,2);
-                displayAlarm();
-                RTC_C->AMINHR   = alarm.hour<<8 | alarm.min | BIT(15) | BIT(7);     //Sets Alarm Time
-                writeOutput("VALID ");
-            }
-            else if((alarm.hour < 12) & (alarm.hour > 0))
-            {
-                displayAt("AM",10,2);
-                displayAlarm();
-                AMPM2 = 1;
-                RTC_C->AMINHR   = alarm.hour<<8 | alarm.min | BIT(15) | BIT(7);     //Sets Alarm Time
-                writeOutput("VALID ");
-            }
-            else
-            {
-                writeOutput("INVALID ");
-            }
-         }
-        else
-        {
-            writeOutput("INVALID ");
-        }
-    }
 }
 
 void wakeUpLights(void)
