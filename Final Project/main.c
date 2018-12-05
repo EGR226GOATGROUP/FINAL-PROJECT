@@ -60,7 +60,15 @@
 #define LOW 0
 #define HIGH 1
 
-void configRTC(int hour, int min);
+// Making a buffer of 100 characters for serial to store to incoming serial data
+#define BUFFER_SIZE 100
+char INPUT_BUFFER[BUFFER_SIZE];
+// initializing the starting position of used buffer and read buffer
+uint8_t storage_location = 0; // used in the interrupt to store new data
+uint8_t read_location = 0; // used in the main application to read valid data that hasn't been read yet
+int duty = 0;
+
+void configRTC(int hour, int min,int sec);
 void ADC14init(void);
 void tempT32interrupt(void);
 void intButtons();
@@ -91,6 +99,11 @@ void sysTickDelay_us(int microsec);
 void SysTick_Init();
 void LED_init(void);
 
+void setupSerial();
+void writeOutput(char *string); // write output charactrs to the serial port
+void readInput(char* string); // read input characters from INPUT_BUFFER that are valid
+void extractTimeSerial(char string[]);
+
 
 float tempC=0,tempF = 0, voltage = 0, raw = 0,raw1 = 0,voltage1 = 0;
 char time[2],tempAr[3];
@@ -101,6 +114,14 @@ int lightBrightness = 0;
 float LCDbrightness = 50;
 int blinkFlag = 0;
 
+enum states{
+    SETTIMESERIAL,
+    SETALARMSERIAL,
+    READTIME,
+    READALARM,
+    INVALID
+};
+enum states state = INVALID;
 // global struct variable called now
 
 //todo alarm status
@@ -129,6 +150,7 @@ void main(void)
     WDT_A->CTL = WDT_A_CTL_PW | WDT_A_CTL_HOLD;     // stop watchdog timer
     //Initilizing Interupts
     __disable_interrupt();
+    char string[BUFFER_SIZE]; // Creates local char array to store incoming serial commands
     intButtons();
     SysTick_Init();                                 //initializes timer
     tempT32interrupt();
@@ -139,6 +161,7 @@ void main(void)
     LED_init();
     intLCDBrightness();
     intSpeedButton();
+    setupSerial();
 
     commandWrite(CLEAR);
 
@@ -149,18 +172,121 @@ void main(void)
     P1->OUT &= ~BIT0;
     TIMER_A0->CCR[4] = 1000;
     __enable_interrupt();
-    configRTC(6, 59);
+    configRTC(6, 59,55);
 
     lightsOn = 1;
 
 
     while(1)
     {
+        readInput(string); // Read the input up to \n, store in string.  This function doesn't return until \n is received
+        if(string[0] != '\0'){ // if string is not empty, check the inputted data.
+            if(1)
+            {
+                if(!strncmp(string,"SETTIME ",8))
+                {
+                    state = SETTIMESERIAL;
+                }
+                else if(!strncmp(string,"SETALARM ",9)) // If command is "OFF", turn off LED
+                {
+                    state = SETALARMSERIAL;
+                }
+                else if(!strncmp(string,"READTIME ",9)) // If command is "OFF", turn off LED
+                {
+                    state = READTIME;
+                }
+                else if(!strncmp(string,"READALARM ",9)) // If command is "OFF", turn off LED
+                {
+                    state = READALARM;
+                }
+                else
+               {
+                   state = INVALID;
+               }
+            }
+            else
+           {
+               state = INVALID;
+           }
+            switch(state) //state machine to account for each light being turned on
+            {
+            case SETTIMESERIAL:
+                writeOutput("VALID ");
+                writeOutput(string);
+                extractTimeSerial(string);
 
+                break;
+            case SETALARMSERIAL:
+                writeOutput("VALID ");
+                writeOutput(string);
+                break;
+
+            case READTIME:
+                writeOutput("VALID ");
+                writeOutput(string);
+                break;
+            case READALARM:
+                writeOutput("VALID ");
+                writeOutput(string);
+                break;
+            case INVALID:
+                writeOutput("INVALID ");
+                writeOutput(string);
+                break;
+
+            }
+
+        }
     }
 }
 
 //--------------------------------------------------Non-Interrupt Functions-----------------------------------------------------------
+
+void extractTimeSerial(char string[])
+{
+    int q = 0;
+    char *p = strtok (string, " ");
+
+    char *array[10], *array2[10];
+
+
+    while (p != NULL)
+    {
+        array[q++] = p;
+        p = strtok (NULL, " ");
+    }
+    q=0;
+    char *r = strtok(array[1],":");
+    while (r != NULL)
+    {
+        array2[q++] = r;
+        r = strtok (NULL, ":");
+    }
+    now.hour = (array2[0][0]-48)*10+(array2[0][1]-48);
+    now.min = (array2[1][0]-48)*10+(array2[1][1]-48);
+    now.sec = (array2[2][0]-48)*10+(array2[2][1]-48);
+    if(now.hour > 12 & now.hour < 24)
+    {
+        now.hour -= 12;
+        AMPM = 0;
+        displayAMPM();
+        configRTC(now.hour, now.min,now.sec);
+    }
+    else if(now.hour > 23)
+    {
+        writeOutput("INVALID TIME");
+    }
+    else{
+        configRTC(now.hour, now.min,now.sec);
+        AMPM = 1;
+        displayAMPM();
+    }
+
+
+   // printf("%d\t%d\n",now.hour,now.min);
+
+
+}
 
 void wakeUpLights(void)
 {
@@ -312,7 +438,7 @@ void PORT4_IRQHandler()
         else if(timePresses==2)                             //Third press -> Save time
         {
             RTC_C->PS1CTL   = 0b11010;                      //Enable timer clock
-            configRTC(now.hour, now.min);
+            configRTC(now.hour, now.min,now.sec);
             timePresses = 0;
         }
 
@@ -643,11 +769,11 @@ void intButtons()
     NVIC_EnableIRQ(PORT4_IRQn);
 }
 
-void configRTC(int hour, int min)
+void configRTC(int hour, int min, int sec)
 {
     RTC_C->CTL0     =   0xA500;     //Write Code, IE on RTC Ready
     RTC_C->CTL13    =   0x0000;
-    RTC_C->TIM0     = min<<8 | 50;
+    RTC_C->TIM0     = min<<8 | sec;
     RTC_C->TIM1     = hour;
 
     RTC_C->PS1CTL   = 0b11010;
@@ -715,7 +841,75 @@ void LED_init(void)
     TIMER_A0->CCTL[1] = 0b11100000;
     TIMER_A0->CTL = 0b1000010100;
 }
+//---------------------------------------------------------------------------Serial Communication Code----------------------------------------------
 
+void setupSerial()
+{
+    P1->SEL0 |=  (BIT2 | BIT3); // P1.2 and P1.3 are EUSCI_A0 RX
+    P1->SEL1 &= ~(BIT2 | BIT3); // and TX respectively.
+
+    EUSCI_A0->CTLW0  = BIT0; // Disables EUSCI. Default configuration is 8N1
+    EUSCI_A0->CTLW0 |= BIT7; // Connects to SMCLK BIT[7:6] = 10
+    EUSCI_A0->CTLW0 &= ~(BIT(15)|BIT(14)|BIT(11));  //BIT15 = Parity, BIT14 = none, BIT11 = one Stop Bit
+    // Baud Rate Configuration
+    // 3000000/(16*9600) = 19.531  (3 MHz at 9600 bps is fast enough to turn on over sampling (UCOS = /16))
+    // UCOS16 = 1 (0ver sampling, /16 turned on)
+    // UCBR  = 19 (Whole portion of the divide)
+    // UCBRF = .531 * 16 = 8 (0x08) (Remainder of the divide)
+    // UCBRS = 3000000/9600 remainder=0.5 -> 0xAA (look up table 22-4)
+    EUSCI_A0->BRW = 19;  // UCBR Value from above
+    EUSCI_A0->MCTLW = 0xAA81; //UCBRS (Bits 15-8) & UCBRF (Bits 7-4) & UCOS16 (Bit 0)
+
+    EUSCI_A0->CTLW0 &= ~BIT0;  // Enable EUSCI
+    EUSCI_A0->IFG &= ~BIT0;    // Clear interrupt
+    EUSCI_A0->IE |= BIT0;      // Enable interrupt
+    NVIC_EnableIRQ(EUSCIA0_IRQn);
+}
+
+void writeOutput(char *string)
+{
+    int i = 0;  // Location in the char array "string" that is being written to
+    while(string[i] != '\0') {
+        EUSCI_A0->TXBUF = string[i];
+        i++;
+        while(!(EUSCI_A0->IFG & BIT1));
+        EUSCI_A0->IFG &= ~BIT1;
+    }
+    EUSCI_A0->TXBUF = '\n';
+}
+
+void readInput(char *string)
+{
+    int i = 0;  // Location in the char array "string" that is being written to
+
+    // One of the few do/while loops I've written, but need to read a character before checking to see if a \n has been read
+    do
+    {
+        // If a new line hasn't been found yet, but we are caught up to what has been received, wait here for new data
+        while(read_location == storage_location && INPUT_BUFFER[read_location] != '\n');
+        string[i] = INPUT_BUFFER[read_location];  // Manual copy of valid character into "string"
+        INPUT_BUFFER[read_location] = '\0';
+        i++; // Increment the location in "string" for next piece of data
+        read_location++; // Increment location in INPUT_BUFFER that has been read
+        if(read_location == BUFFER_SIZE)  // If the end of INPUT_BUFFER has been reached, loop back to 0
+            read_location = 0;
+    }
+    while(string[i-1] != '\n'); // If a \n was just read, break out of the while loop
+
+    string[i-1] = '\0'; // Replace the \n with a \0 to end the string when returning this function
+}
+
+void EUSCIA0_IRQHandler(void)
+{
+    if (EUSCI_A0->IFG & BIT0)  // Interrupt on the receive line
+    {
+        INPUT_BUFFER[storage_location] = EUSCI_A0->RXBUF; // store the new piece of data at the present location in the buffer
+        EUSCI_A0->IFG &= ~BIT0; // Clear the interrupt flag right away in case new data is ready
+        storage_location++; // update to the next position in the buffer
+        if(storage_location == BUFFER_SIZE) // if the end of the buffer was reached, loop back to the start
+            storage_location = 0;
+    }
+}
 //---------------------------------------------------------------------------LCD Displaying functions----------------------------------------------
 
 void displayAt(char text[], int place, int lineNum)
