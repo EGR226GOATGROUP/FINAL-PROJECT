@@ -113,7 +113,7 @@ void extractTimeSerial(char string[]);
 
 float tempC=0,tempF = 0, voltage = 0, raw = 0,raw1 = 0,voltage1 = 0;
 char time[2],tempAr[3];
-int RTC_flag =0, timePresses=0, alarmFlag=0, alarmSoundFlag=0, alarmPresses=0, speed=0;
+int RTC_flag =0, timePresses=0, alarmFlag=0, alarmSoundFlag=0, alarmPresses=0, speed=0, lightOn=0, resetNeeded=0;
 int AMPM = 1, AMPM2=1;                       //flag to determine AM or PM will be used more for UART functionality to convert 24 hr to 12 hr time
 int lightsOn = 0;                   //flag to be used to check if the wake up lights should be turned on
 uint32_t lightBrightness = 0;
@@ -429,6 +429,7 @@ void T32_INT2_IRQHandler()                          //Interrupt Handler for Time
     TIMER32_2->INTCLR = 1;                          //Clear interrupt flag so it does not interrupt again immediately.
     if((alarmFlag==1)&(timePresses==0)&(alarmSoundFlag==0))
     {
+        lightOn=1;
         uint32_t totalAlarm=0,totalTime=0;
         totalAlarm = (alarm.hour * 3600) + (alarm.min*60) + (0)+(!AMPM2 * 12 * 3600);
         totalTime  = (now.hour*3600) + (now.min*60) + (now.sec)+(!AMPM * 12 * 3600);
@@ -442,12 +443,21 @@ void T32_INT2_IRQHandler()                          //Interrupt Handler for Time
             TIMER_A0->CCR[1] = 0;
             TIMER32_2->CONTROL &= ~BIT7;
             lightsOn = 0;
+            lightOn=0;
         }
     }
     else if(alarmSoundFlag==1)
+    {
         TIMER_A0->CCR[1] = 1000;
+        lightOn=1;
+    }
+
     else
+    {
         TIMER_A0->CCR[1] = 0;
+        lightOn=0;
+    }
+
 }
 
 void PORT1_IRQHandler()
@@ -492,7 +502,12 @@ void PORT4_IRQHandler()
     //Alarm toggle/Up Button Press
     if(P4->IFG & (ALARM|UP))
     {
-        if(alarmSoundFlag == 0)
+        if(lightOn & !alarmSoundFlag)               //reset needed, lights are disabled and the alarm is disabled
+        {
+            resetNeeded=1;
+            alarmFlag=0;
+        }
+        else if(alarmSoundFlag == 0)
         {
             if(timePresses==1)                              //Incoment Hours
             {
@@ -685,6 +700,11 @@ void RTC_C_IRQHandler(void)
             {
                 P1->OUT ^= BIT0;            //this is what happens when alarm goes off
                 alarmSoundFlag=1;
+            }
+            if(resetNeeded)
+            {
+                resetNeeded=0;
+                alarmFlag=1;
             }
             RTC_C->CTL0 = 0xA500;
         }
