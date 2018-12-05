@@ -176,10 +176,12 @@ void main(void)
     configRTC(6, 59,55);
 
     lightsOn = 1;
-
+int tempHour = 0,tempHourA;
 
     while(1)
     {
+        tempHour = now.hour;
+        tempHourA = alarm.hour;
         readInput(string); // Read the input up to \n, store in string.  This function doesn't return until \n is received
         if(string[0] != '\0'){ // if string is not empty, check the inputted data.
             if(1)
@@ -192,11 +194,11 @@ void main(void)
                 {
                     state = SETALARMSERIAL;
                 }
-                else if(!strncmp(string,"READTIME ",9))
+                else if(!strncmp(string,"READTIME",9))
                 {
                     state = READTIME;
                 }
-                else if(!strncmp(string,"READALARM ",9))
+                else if(!strncmp(string,"READALARM",9))
                 {
                     state = READALARM;
                 }
@@ -212,21 +214,39 @@ void main(void)
             switch(state) //state machine to account for each light being turned on
             {
             case SETTIMESERIAL:
-                //writeOutput(string);
                 extractTimeSerial(string);
                 break;
             case SETALARMSERIAL:
-                //writeOutput(string);
                 extractTimeSerial(string);
                 break;
 
             case READTIME:
-                writeOutput("VALID ");
-                writeOutput(string);
+                tempHour = now.hour;
+                if(tempHour>12)
+                {
+                   tempHour -= 12;
+                   sprintf(string,"%.2d:%.2d:%.2d",tempHour,now.min,now.sec);
+                   writeOutput(string);
+                }
+                else if(tempHour <=12)
+                {
+                    sprintf(string,"%.2d:%.2d:%.2d",tempHour,now.min,now.sec);
+                    writeOutput(string);
+                }
                 break;
             case READALARM:
-                writeOutput("VALID ");
-                writeOutput(string);
+                tempHourA = alarm.hour;
+                if(tempHourA>12)
+                {
+                   tempHourA = 12;
+                   sprintf(string,"%.2d:%.2d",tempHourA,alarm.min);
+                   writeOutput(string);
+                }
+                else if(tempHourA <=12)
+                {
+                    sprintf(string,"%.2d:%.2d",tempHourA,alarm.min);
+                    writeOutput(string);
+                }
                 break;
             case INVALID:
                 writeOutput("INVALID ");
@@ -337,20 +357,6 @@ void extractTimeSerial(char string[])
             writeOutput("INVALID ");
         }
     }
-<<<<<<< HEAD
-    else{
-        configRTC(now.hour, now.min,now.sec);
-        AMPM = 1;
-        displayAMPM();
-    }
-=======
-
-
-
-   // printf("%d\t%d\n",now.hour,now.min);
-
-
->>>>>>> branch 'master' of https://github.com/EGR226GOATGROUP/FINAL-PROJECT.git
 }
 
 void wakeUpLights(void)
