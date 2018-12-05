@@ -39,7 +39,14 @@
  * Make change to save again
  * Commit and Push again
  *
+ * SET UART TO
+ * BAUD: 115200
+ * PARITY: EVEN
+ * STOP: 1 BIT
+ *
  */
+
+//todo when in 1 min of alarm change back to reg time
 
 #define __SYSTEM_CLOCK 3000000
 
@@ -58,7 +65,15 @@
 #define LOW 0
 #define HIGH 1
 
-void configRTC(int hour, int min);
+// Making a buffer of 100 characters for serial to store to incoming serial data
+#define BUFFER_SIZE 100
+char INPUT_BUFFER[BUFFER_SIZE];
+// initializing the starting position of used buffer and read buffer
+uint8_t storage_location = 0; // used in the interrupt to store new data
+uint8_t read_location = 0; // used in the main application to read valid data that hasn't been read yet
+int duty = 0;
+
+void configRTC(int hour, int min,int sec);
 void ADC14init(void);
 void tempT32interrupt(void);
 void intButtons();
@@ -68,9 +83,14 @@ void intSpeedButton();
 void displayAMPM();
 void toggleAMPM();
 void displayHour();
+void displayMin();
 void toggleAlarm();
 void displayAlarm();
 void toggleAMPM2();
+void wakeUpLights(void);
+void LEDT32interrupt(void);
+void intLCDBrightness(void);
+void intBlinkTimerA(void);
 
 
 void displayAt(char text[], int place, int line);
@@ -84,21 +104,31 @@ void sysTickDelay_ms(int ms);
 void sysTickDelay_us(int microsec);
 void SysTick_Init();
 void LED_init(void);
-void wakeUpLights(void);
-void LEDT32interrupt(void);
-void intLCDBrightness(void);
-void intBlinkTimerA(void);
+
+void setupSerial();
+void writeOutput(char *string); // write output charactrs to the serial port
+void readInput(char* string); // read input characters from INPUT_BUFFER that are valid
+void extractTimeSerial(char string[]);
+
 
 float tempC=0,tempF = 0, voltage = 0, raw = 0,raw1 = 0,voltage1 = 0;
 char time[2],tempAr[3];
-int RTC_flag =0, timePresses=0, alarmFlag=0, alarmPresses=0, speed=0;
+int RTC_flag =0, timePresses=0, alarmFlag=0, alarmSoundFlag=0, alarmPresses=0, speed=0, lightOn=0, resetNeeded=0;
 int AMPM = 1, AMPM2=1;                       //flag to determine AM or PM will be used more for UART functionality to convert 24 hr to 12 hr time
 int lightsOn = 0;                   //flag to be used to check if the wake up lights should be turned on
-int lightBrightness = 0;
+uint32_t lightBrightness = 0;
 float LCDbrightness = 50;
 int blinkFlag = 0;
 
-// global struct variable called now
+enum states{
+    SETTIMESERIAL,
+    SETALARMSERIAL,
+    READTIME,
+    READALARM,
+    INVALID
+};
+enum states state = INVALID;
+
 struct
 {
     uint8_t sec;
@@ -112,6 +142,18 @@ struct
     uint8_t hour;
 } alarm;
 
+struct
+{
+    uint8_t min;
+    uint8_t hour;
+}master;
+
+//todo alarm status
+//todo stop 1 min before
+//todo alarm snooze
+//todo actualy toggle alarm
+//todo snooze
+
 //-------------------------------------------------MAIN---------------------------------------------------------------
 
 void main(void)
@@ -119,6 +161,7 @@ void main(void)
     WDT_A->CTL = WDT_A_CTL_PW | WDT_A_CTL_HOLD;     // stop watchdog timer
     //Initilizing Interupts
     __disable_interrupt();
+    char string[BUFFER_SIZE]; // Creates local char array to store incoming serial commands
     intButtons();
     SysTick_Init();                                 //initializes timer
     tempT32interrupt();
@@ -129,6 +172,7 @@ void main(void)
     LED_init();
     intLCDBrightness();
     intSpeedButton();
+    setupSerial();
 
     commandWrite(CLEAR);
 
@@ -138,19 +182,140 @@ void main(void)
     P1->DIR |= BIT0;
     P1->OUT &= ~BIT0;
     TIMER_A0->CCR[4] = 1000;
+
     __enable_interrupt();
-    configRTC(5, 59);
+    configRTC(6, 59,55);
 
     lightsOn = 1;
-
-
+int tempHour = 0,tempHourA;
+timePresses=0;
     while(1)
     {
+        tempHour = now.hour;
+        tempHourA = alarm.hour;
+        readInput(string); // Read the input up to \n, store in string.  This function doesn't return until \n is received
+        if(string[0] != '\0'){ // if string is not empty, check the inputted data.
 
+                if(!strncmp(string,"SETTIME ",8))
+                {
+                    state = SETTIMESERIAL;
+                }
+                else if(!strncmp(string,"SETALARM ",9))
+                {
+                    state = SETALARMSERIAL;
+                }
+                else if(!strncmp(string,"READTIME",9))
+                {
+                    state = READTIME;
+                }
+                else if(!strncmp(string,"READALARM",9))
+                {
+                    state = READALARM;
+                }
+                else
+               {
+                   state = INVALID;
+               }
+
+            switch(state) //state machine to account for each light being turned on
+            {
+            case SETTIMESERIAL:
+                extractTimeSerial(string);
+                break;
+            case SETALARMSERIAL:
+                extractTimeSerial(string);
+                break;
+
+            case READTIME:
+                tempHour = now.hour;
+                if(!AMPM)
+                {
+                   tempHour += 12;
+                   sprintf(string,"%.2d:%.2d:%.2d",tempHour,now.min,now.sec);
+                   writeOutput(string);
+                }
+                else if(AMPM)
+                {
+                    sprintf(string,"%.2d:%.2d:%.2d",tempHour,now.min,now.sec);
+                    writeOutput(string);
+                }
+                break;
+            case READALARM:
+                tempHourA = alarm.hour;
+                if(!AMPM2)
+                {
+                   tempHourA += 12;
+                   sprintf(string,"%.2d:%.2d",tempHourA,alarm.min);
+                   writeOutput(string);
+                }
+                else if(AMPM2)
+                {
+                    sprintf(string,"%.2d:%.2d",tempHourA,alarm.min);
+                    writeOutput(string);
+                }
+                break;
+            case INVALID:
+                writeOutput("INVALID ");
+                writeOutput(string);
+                break;
+
+            }
+
+        }
     }
 }
 
 //--------------------------------------------------Non-Interrupt Functions-----------------------------------------------------------
+
+void extractTimeSerial(char string[])
+{   writeOutput("Command Sent: ");
+    writeOutput(string);
+
+
+            if(state == SETTIMESERIAL)
+            {
+                now.hour = ((int)string[8]-'0')*10+((int)string[9]-'0');
+                now.min = ((int)string[11]-'0')*10+((int)string[12]-'0');
+                now.sec = ((int)string[14]-'0')*10+((int)string[15]-'0');
+                if(now.hour>12)
+                {
+                    now.hour-=12;
+                    AMPM = 0;
+                    displayAMPM();
+                }
+                else if(now.hour<=12)
+                {
+                    AMPM = 1;
+                    displayAMPM();
+                }
+                configRTC(now.hour, now.min,now.sec);
+            }
+            else if(state == SETALARMSERIAL)
+            {
+                alarm.hour = ((int)string[9]-'0')*10+((int)string[10]-'0');
+                alarm.min = ((int)string[12]-'0')*10+((int)string[13]-'0');
+                if(alarm.hour>12)
+                {
+                    alarm.hour-=12;
+                    AMPM2 = 0;
+                    displayAlarm();
+                    displayAt("PM",10,2);
+                    RTC_C->AMINHR   = alarm.hour<<8 | alarm.min | BIT(15) | BIT(7);     //Sets Alarm Time
+                }
+                else if(alarm.hour<=12)
+                {
+                    AMPM2 = 1;
+                    displayAlarm();
+                    displayAt("AM",10,2);
+                    RTC_C->AMINHR   = alarm.hour<<8 | alarm.min | BIT(15) | BIT(7);     //Sets Alarm Time
+                }
+            }
+            else
+            {
+                writeOutput("INVALID ");
+            }
+
+}
 
 void wakeUpLights(void)
 {
@@ -159,16 +324,17 @@ void wakeUpLights(void)
 
 void toggleAlarm()
 {
-    if(alarmFlag)
+    if(alarmFlag==1)
     {
-        alarmFlag=0;
-        displayAt("OFF",10,3);
+        alarmFlag=0;                                                        //toggles the alarm falg
+        displayAt("OFF",10,3);                                              //Displays Alarm: OFF
     }
 
     else
     {
-        alarmFlag=1;
-        displayAt("ON ",10,3);
+        alarmFlag=1;                                                        //togles the alarm flag
+        displayAt("ON ",10,3);                                              //Displays Alarm: On
+        RTC_C->AMINHR   = alarm.hour<<8 | alarm.min | BIT(15) | BIT(7);     //Sets Alarm Time
     }
 }
 
@@ -188,6 +354,7 @@ void displayAlarm()
 
     sprintf(time,"%.2d",alarm.min);
     displayAt(time,6,2);
+    RTC_C->AMINHR   = alarm.hour<<8 | alarm.min | BIT(15) | BIT(7);
 }
 
 void toggleAMPM2()
@@ -216,12 +383,12 @@ void displayAMPM()
 {
     if(AMPM)                                        //prints AM or PM based on flag variable
     {
-        sprintf(time,"PM");
+        sprintf(time,"AM");
         displayAt(time,12,1);
     }
     else if(!AMPM)
     {
-        sprintf(time,"AM");
+        sprintf(time,"PM");
         displayAt(time,12,1);
     }
 }
@@ -260,15 +427,37 @@ void T32_INT1_IRQHandler()                          //Interrupt Handler for Time
 void T32_INT2_IRQHandler()                          //Interrupt Handler for Timer 2
 {
     TIMER32_2->INTCLR = 1;                          //Clear interrupt flag so it does not interrupt again immediately.
-    lightBrightness+= 10;                           //increase brightness by 1% every interrupt (3 seconds when enabled)
-    TIMER_A0->CCR[1] = lightBrightness;
-    sprintf(time,"%.2d",lightBrightness);
-    if(lightBrightness == 1000)
+    if((alarmFlag==1)&(timePresses==0)&(alarmSoundFlag==0))
+    {
+        lightOn=1;
+        uint32_t totalAlarm=0,totalTime=0;
+        totalAlarm = (alarm.hour * 3600) + (alarm.min*60) + (0)+(!AMPM2 * 12 * 3600);
+        totalTime  = (now.hour*3600) + (now.min*60) + (now.sec)+(!AMPM * 12 * 3600);
+
+        lightBrightness=(1000-((totalAlarm-totalTime)*3.33333333333));
+
+        //lightBrightness+= 10;                           //increase brightness by 1% every interrupt (3 seconds when enabled)
+        TIMER_A0->CCR[1] = lightBrightness;
+        if(lightBrightness > 1000)
+        {
+            TIMER_A0->CCR[1] = 0;
+            TIMER32_2->CONTROL &= ~BIT7;
+            lightsOn = 0;
+            lightOn=0;
+        }
+    }
+    else if(alarmSoundFlag==1)
+    {
+        TIMER_A0->CCR[1] = 1000;
+        lightOn=1;
+    }
+
+    else
     {
         TIMER_A0->CCR[1] = 0;
-        TIMER32_2->CONTROL &= ~BIT7;
-        lightsOn = 0;
+        lightOn=0;
     }
+
 }
 
 void PORT1_IRQHandler()
@@ -276,13 +465,11 @@ void PORT1_IRQHandler()
     if(P1->IFG & BIT1)
     {
         speed = HIGH;
-        //P1->OUT |= BIT0;                //todo debug led
         P1->IFG &= ~BIT1;
     }
     else if(P1->IFG & BIT4)
     {
         speed = LOW;
-        //P1->OUT &= ~BIT0;               //todo debug led
         P1->IFG &= ~BIT4;
     }
 }
@@ -292,67 +479,86 @@ void PORT4_IRQHandler()
     //SetTime Button Press
     if(P4->IFG & SETTIME)
     {
-        if((timePresses==0) & (alarmPresses==0))                                  //First press -> Go into time Hours edit
+        if(alarmSoundFlag == 0)
         {
-            RTC_C->PS1CTL   = 0b00000;                      //disable timer clock
-            displayAt("00",8,1);                            //clears seconds
-            timePresses++;
+            if((timePresses==0) & (alarmPresses==0))                                  //First press -> Go into time Hours edit
+            {
+                RTC_C->PS1CTL   = 0b00000;                      //disable timer clock
+                displayAt("00",8,1);                            //clears seconds
+                timePresses++;
+            }
+            else if((timePresses==1) & (alarmPresses==0))
+                timePresses++;
+            else if(timePresses==2)                             //Third press -> Save time
+            {
+                RTC_C->PS1CTL   = 0b11010;                      //Enable timer clock
+                configRTC(now.hour, now.min,now.sec);
+                timePresses = 0;
+            }
         }
-        else if((timePresses==1) & (alarmPresses==0))
-            timePresses++;
-        else if(timePresses==2)                             //Third press -> Save time
-        {
-            RTC_C->PS1CTL   = 0b11010;                      //Enable timer clock
-            configRTC(now.hour, now.min);
-            timePresses = 0;
-        }
-
         P4->IFG &= ~SETTIME;
     }
 
+    //(alarmFlag==1)&(timePresses==0)&(alarmSoundFlag==0)
     //Alarm toggle/Up Button Press
     if(P4->IFG & (ALARM|UP))
     {
-        if(timePresses==1)                              //Incoment Hours
+        if(lightOn & !alarmSoundFlag)               //reset needed, lights are disabled and the alarm is disabled
         {
-            now.hour++;
-            if(now.hour>12)                                //hour Rolls Over
+            resetNeeded=1;
+            alarmFlag=0;
+        }
+        else if(!alarmSoundFlag)
+        {
+            if(timePresses==1)                              //Incoment Hours
             {
-                now.hour=1;
-                toggleAMPM();
-                displayAMPM();
+                now.hour++;
+                if(now.hour>12)                                //hour Rolls Over
+                    now.hour=1;
+                else if(now.hour==12)
+                {
+                    toggleAMPM();
+                    displayAMPM();
+                }
+                displayHour();
             }
-            displayHour();
-        }
-        else if(timePresses==2)                         //incoment Minutes
-        {
-            now.min++;
-            if(now.min>59)
-                now.min=0;                                  //Minutes reset
-            displayMin();
-        }
-        else if(alarmPresses==1)
-        {
-            alarm.hour++;
-            if(alarm.hour>12)
+            else if(timePresses==2)                         //incoment Minutes
             {
-                alarm.hour=1;
-                toggleAMPM2();
+                now.min++;
+                if(now.min>59)
+                    now.min=0;                                  //Minutes reset
+                displayMin();
             }
-            displayAlarm();
-        }
-        else if(alarmPresses==2)
-        {
-            alarm.min++;
-            if(alarm.min>59)
+            else if(alarmPresses==1)
             {
-                alarm.min=0;
+                alarm.hour++;
+                if(alarm.hour>12)
+                    alarm.hour=1;
+                else if(alarm.hour==12)
+                    toggleAMPM2();
+                displayAlarm();
             }
-            displayAlarm();
+            else if(alarmPresses==2)
+            {
+                alarm.min++;
+                if(alarm.min>59)
+                {
+                    alarm.min=0;
+                }
+                displayAlarm();
+            }
+            else                                            //toggles alarm output and alarmflag
+            {
+                toggleAlarm();
+            }
         }
-        else                                            //toggles alarm output and alarmflag
+        else if(alarmSoundFlag==1)
         {
-            toggleAlarm();
+            TIMER_A0->CCR[1] = 0;
+            alarmSoundFlag=0;
+            alarm.hour = master.hour;
+            alarm.min = master.min;
+            //turn of alarm for the day set alarm = master
         }
 
         P4->IFG &= ~(ALARM|UP);
@@ -361,55 +567,77 @@ void PORT4_IRQHandler()
     //SetAlarm Button Press
     if(P4->IFG & SETALARM)                              //SetAlarm Button Press
     {
-        if(timePresses==0)
+        if(alarmSoundFlag == 0)
         {
-            alarmPresses++;
+            if(timePresses==0)
+            {
+                alarmPresses++;
+            }
+            if(alarmPresses==3)
+                alarmPresses=0;
         }
-        if(alarmPresses==3)
-            alarmPresses=0;
         P4->IFG &= ~SETALARM;
     }
 
     //Snooze/Down Button Press
     if(P4->IFG & SNOOZE)
     {
-        if(timePresses==1)
+        if(!alarmSoundFlag)
         {
-            now.hour--;
-            if(now.hour<1)                                //hour Rolls Over
+            if(timePresses==1)
             {
-                now.hour=12;
-                toggleAMPM();
-                displayAMPM();
+                now.hour--;
+                if(now.hour<1)                                //hour Rolls Over
+                    now.hour=12;
+                if(now.hour==11)
+                {
+                    toggleAMPM();
+                    displayAMPM();
+                }
+
+                displayHour();
+            }
+            else if((timePresses==2)&(!alarmSoundFlag))                         //incoment Minutes
+            {
+                now.min--;
+                if(now.min>59)
+                    now.min=59;                                  //Minutes reset
+                displayMin();
+            }
+            else if((alarmPresses==1)&(!alarmSoundFlag))
+            {
+                alarm.hour--;
+                master.hour = alarm.hour;
+                if(alarm.hour==0)
+                    alarm.hour=12;
+                else if(alarm.hour==11)
+                    toggleAMPM2();
+                displayAlarm();
+            }
+            else if((alarmPresses==2)&(!alarmSoundFlag))
+            {
+                alarm.min--;
+                master.min = alarm.min;
+                if(alarm.min>100)
+                {
+                    alarm.min=59;
+                }
+                displayAlarm();
+            }
+        }
+        else if(alarmSoundFlag)     //alarm is on and snooze is pressed
+        {
+            displayAt("IO",0,2);
+            //todo here is where we need to extend the time
+            alarm.min = alarm.min + 10;
+            if(alarm.min>59)
+            {
+                //todo
+                alarm.min = alarm.min-59;
+                displayAlarm();
+                //if lights are on
             }
 
-            displayHour();
-        }
-        else if(timePresses==2)                         //incoment Minutes
-        {
-            now.min--;
-            if(now.min>59)
-                now.min=59;                                  //Minutes reset
-            displayMin();
-        }
-        else if(alarmPresses==1)
-        {
-            alarm.hour--;
-            if(alarm.hour==0)
-            {
-                alarm.hour=12;
-                toggleAMPM2();
-            }
-            displayAlarm();
-        }
-        else if(alarmPresses==2)
-        {
-            alarm.min--;
-            if(alarm.min>100)
-            {
-                alarm.min=59;
-            }
-            displayAlarm();
         }
 
         P4->IFG &= ~SNOOZE;
@@ -419,9 +647,10 @@ void PORT4_IRQHandler()
 void RTC_C_IRQHandler(void)
 {
     if(RTC_C->PS1CTL & BIT0)
-    {
-        if(speed != HIGH)
-        {
+    {//     speed is low        alarm is off                middle of hour
+        if((speed != HIGH) | (((alarm.hour==now.hour)&((alarm.min-now.min)==1)&(AMPM==AMPM2)) |
+                (((alarm.hour-now.hour)==1)&(now.min==59)&(AMPM==AMPM2)&(alarm.min==0)) | (((now.hour==12)&(alarm.hour==1))&(AMPM!=AMPM2)&(now.min==59)))&(alarmFlag==1))
+        {           //change of hour                                                changing from AMPM
             now.sec         =   RTC_C->TIM0>>0 & 0x00FF;
             now.min         =   RTC_C->TIM0>>8 & 0x00FF;
             now.hour        =   RTC_C->TIM1>>0 & 0x00FF;
@@ -465,8 +694,19 @@ void RTC_C_IRQHandler(void)
 
         displayAMPM();
 
-        if(RTC_C->CTL0 & BIT1) {
-            P1->OUT |= BIT0;            //this is what happens when alarm goes off
+
+        if(RTC_C->CTL0 & BIT1)              //todo
+        {
+            if((alarmFlag==1)&(AMPM==AMPM2))
+            {
+                P1->OUT ^= BIT0;            //this is what happens when alarm goes off
+                alarmSoundFlag=1;
+            }
+            if(resetNeeded)
+            {
+                resetNeeded=0;
+                alarmFlag=1;
+            }
             RTC_C->CTL0 = 0xA500;
         }
     }
@@ -595,10 +835,13 @@ void intLCDBrightness(void)
 }
 void intAlarm()
 {
-    displayAt("6:00  AM",4,2);
-    displayAt("Alarm: OFF",3,3);
-    alarm.hour = 6;
+    displayAt("7:00  AM",4,2);
+    displayAt("Alarm: ON ",3,3);
+    alarmFlag=1;
+    alarm.hour = 7;
     alarm.min = 0;
+    master.hour = alarm.hour;
+    master.min = alarm.min;
 }
 
 void intSpeedButton()
@@ -627,18 +870,19 @@ void intButtons()
     NVIC_EnableIRQ(PORT4_IRQn);
 }
 
-void configRTC(int hour, int min)
+void configRTC(int hour, int min, int sec)
 {
     RTC_C->CTL0     =   0xA500;     //Write Code, IE on RTC Ready
     RTC_C->CTL13    =   0x0000;
-    RTC_C->TIM0     = min<<8 | 00;
+    RTC_C->TIM0     = min<<8 | sec;
     RTC_C->TIM1     = hour;
 
     RTC_C->PS1CTL   = 0b11010;
 
     RTC_C->AMINHR   = alarm.hour<<8 | alarm.min | BIT(15) | BIT(7);
 
-    RTC_C->CTL0     = ((0xA500) | BIT5);
+
+    //RTC_C->CTL0     = ((0xA500) | BIT5);                //enales the alarm
     NVIC_EnableIRQ(RTC_C_IRQn);
 }
 
@@ -681,8 +925,9 @@ void tempT32interrupt(void)
 
 void LEDT32interrupt(void)
 {
-    TIMER32_2->LOAD       =   175781;        //Set interval for interrupt to occur at
-    TIMER32_2->CONTROL       =  0b01101000; //use bit 7 to enable in wake up lights, interrupt enabled, divide by 256, 16 bit mode, wrapping mode
+    TIMER32_2->LOAD       =  10000;        //Set interval for interrupt to occur at
+    TIMER32_2->CONTROL    =  0b01101000; //use bit 7 to enable in wake up lights, interrupt enabled, divide by 256, 16 bit mode, wrapping mode
+    TIMER32_2->CONTROL   |=  BIT7;
     NVIC_EnableIRQ(T32_INT2_IRQn);
 }
 
@@ -698,7 +943,75 @@ void LED_init(void)
     TIMER_A0->CCTL[1] = 0b11100000;
     TIMER_A0->CTL = 0b1000010100;
 }
+//---------------------------------------------------------------------------Serial Communication Code----------------------------------------------
 
+void setupSerial()
+{
+    P1->SEL0 |=  (BIT2 | BIT3); // P1.2 and P1.3 are EUSCI_A0 RX
+    P1->SEL1 &= ~(BIT2 | BIT3); // and TX respectively.
+
+    EUSCI_A0->CTLW0  = BIT0; // Disables EUSCI. Default configuration is 8N1
+    EUSCI_A0->CTLW0 |= BIT7; // Connects to SMCLK BIT[7:6] = 10, BIT14 = none
+    EUSCI_A0->CTLW0 &=  ~(BIT(15)|BIT(14)|BIT(11));  //BIT15 = Parity, BIT11 = one Stop Bit
+    // Baud Rate Configuration
+    // 3000000/(16*9600) = 19.531  (3 MHz at 9600 bps is fast enough to turn on over sampling (UCOS = /16))
+    // UCOS16 = 1 (0ver sampling, /16 turned on)
+    // UCBR  = 19 (Whole portion of the divide)
+    // UCBRF = .531 * 16 = 8 (0x08) (Remainder of the divide)
+    // UCBRS = 3000000/9600 remainder=0.5 -> 0xAA (look up table 22-4)
+    EUSCI_A0->BRW = 19;  // UCBR Value from above
+    EUSCI_A0->MCTLW = 0xAA81; //UCBRS (Bits 15-8) & UCBRF (Bits 7-4) & UCOS16 (Bit 0)
+
+    EUSCI_A0->CTLW0 &= ~BIT0;  // Enable EUSCI
+    EUSCI_A0->IFG &= ~BIT0;    // Clear interrupt
+    EUSCI_A0->IE |= BIT0;      // Enable interrupt
+    NVIC_EnableIRQ(EUSCIA0_IRQn);
+}
+
+void writeOutput(char *string)
+{
+    int i = 0;  // Location in the char array "string" that is being written to
+    while(string[i] != '\0') {
+        EUSCI_A0->TXBUF = string[i];
+        i++;
+        while(!(EUSCI_A0->IFG & BIT1));
+        EUSCI_A0->IFG &= ~BIT1;
+    }
+    EUSCI_A0->TXBUF = '\n';
+}
+
+void readInput(char *string)
+{
+    int i = 0;  // Location in the char array "string" that is being written to
+
+    // One of the few do/while loops I've written, but need to read a character before checking to see if a \n has been read
+    do
+    {
+        // If a new line hasn't been found yet, but we are caught up to what has been received, wait here for new data
+        while(read_location == storage_location && INPUT_BUFFER[read_location] != '\n');
+        string[i] = INPUT_BUFFER[read_location];  // Manual copy of valid character into "string"
+        INPUT_BUFFER[read_location] = '\0';
+        i++; // Increment the location in "string" for next piece of data
+        read_location++; // Increment location in INPUT_BUFFER that has been read
+        if(read_location == BUFFER_SIZE)  // If the end of INPUT_BUFFER has been reached, loop back to 0
+            read_location = 0;
+    }
+    while(string[i-1] != '\n'); // If a \n was just read, break out of the while loop
+
+    string[i-1] = '\0'; // Replace the \n with a \0 to end the string when returning this function
+}
+
+void EUSCIA0_IRQHandler(void)
+{
+    if (EUSCI_A0->IFG & BIT0)  // Interrupt on the receive line
+    {
+        INPUT_BUFFER[storage_location] = EUSCI_A0->RXBUF; // store the new piece of data at the present location in the buffer
+        EUSCI_A0->IFG &= ~BIT0; // Clear the interrupt flag right away in case new data is ready
+        storage_location++; // update to the next position in the buffer
+        if(storage_location == BUFFER_SIZE) // if the end of the buffer was reached, loop back to the start
+            storage_location = 0;
+    }
+}
 //---------------------------------------------------------------------------LCD Displaying functions----------------------------------------------
 
 void displayAt(char text[], int place, int lineNum)
@@ -843,6 +1156,7 @@ void sysTickDelay_us(int microsec) //timer microseconds
     SysTick->VAL = 0;
     while((SysTick->CTRL & BIT(16))==0);
 }
+<<<<<<< HEAD
 
 
 
@@ -903,3 +1217,5 @@ void sysTickDelay_us(int microsec) //timer microseconds
 
 
 
+=======
+>>>>>>> branch 'master' of https://github.com/EGR226GOATGROUP/FINAL-PROJECT.git
