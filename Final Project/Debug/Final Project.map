@@ -1,7 +1,11 @@
 ******************************************************************************
                   TI ARM Linker PC v18.1.4                     
 ******************************************************************************
+<<<<<<< HEAD
 >> Linked Tue Dec  4 21:19:10 2018
+=======
+>> Linked Tue Dec  4 20:52:02 2018
+>>>>>>> branch 'master' of https://github.com/EGR226GOATGROUP/FINAL-PROJECT.git
 
 OUTPUT FILE NAME:   <Final Project.out>
 ENTRY POINT SYMBOL: "_c_int00_noargs"  address: 0000374d
