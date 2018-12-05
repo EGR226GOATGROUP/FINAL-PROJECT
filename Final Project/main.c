@@ -305,6 +305,67 @@ void extractTimeSerial(char string[])
                     RTC_C->AMINHR   = alarm.hour<<8 | alarm.min | BIT(15) | BIT(7);     //Sets Alarm Time
                 }
             }
+<<<<<<< HEAD
+=======
+            else
+            {
+                writeOutput("INVALID ");
+            }
+        }
+        else
+        {
+            writeOutput(" INVALID ");
+        }
+
+
+    }
+    else if(state == SETALARMSERIAL)
+    {
+        alarm.hour = (array2[0][0]-48)*10+(array2[0][1]-48);
+        alarm.min = (array2[1][0]-48)*10+(array2[1][1]-48);
+        printf("\n%d\t%d\n",alarm.hour,alarm.min);
+        if((alarm.min > 0) & (alarm.min < 60))
+        {
+
+            if((alarm.hour > 12) & (alarm.hour < 24))
+            {
+                AMPM2 = 0;
+                alarm.hour -= 12;
+                displayAt("PM",10,2);
+                displayAlarm();
+                RTC_C->AMINHR   = alarm.hour<<8 | alarm.min | BIT(15) | BIT(7);     //Sets Alarm Time
+                writeOutput("VALID ");
+            }
+            else if((alarm.hour < 12) & (alarm.hour > 0))
+            {
+                displayAt("AM",10,2);
+                displayAlarm();
+                AMPM2 = 1;
+                RTC_C->AMINHR   = alarm.hour<<8 | alarm.min | BIT(15) | BIT(7);     //Sets Alarm Time
+                writeOutput("VALID ");
+            }
+            else
+            {
+                writeOutput("INVALID ");
+            }
+         }
+        else
+        {
+            writeOutput("INVALID ");
+        }
+    }
+    else{
+        configRTC(now.hour, now.min,now.sec);
+        AMPM = 1;
+        displayAMPM();
+    }
+
+
+
+   // printf("%d\t%d\n",now.hour,now.min);
+
+
+>>>>>>> branch 'master' of https://github.com/EGR226GOATGROUP/FINAL-PROJECT.git
 }
 
 void wakeUpLights(void)
