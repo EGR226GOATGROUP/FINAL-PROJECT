@@ -107,7 +107,7 @@ void extractTimeSerial(char string[]);
 
 float tempC=0,tempF = 0, voltage = 0, raw = 0,raw1 = 0,voltage1 = 0;
 char time[2],tempAr[3];
-int RTC_flag =0, timePresses=0, alarmFlag=0, alarmPresses=0, speed=0;
+int RTC_flag =0, timePresses=0, alarmFlag=0, alarmSoundFlag=0, alarmPresses=0, speed=0;
 int AMPM = 1, AMPM2=1;                       //flag to determine AM or PM will be used more for UART functionality to convert 24 hr to 12 hr time
 int lightsOn = 0;                   //flag to be used to check if the wake up lights should be turned on
 uint32_t lightBrightness = 0;
@@ -122,13 +122,6 @@ enum states{
     INVALID
 };
 enum states state = INVALID;
-// global struct variable called now
-
-//todo alarm status
-//todo stop 1 min before
-//todo alarm snooze
-//todo actualy toggle alarm
-//todo snooze
 
 struct
 {
@@ -142,6 +135,18 @@ struct
     uint8_t min;
     uint8_t hour;
 } alarm;
+
+struct
+{
+    uint8_t min;
+    uint8_t hour;
+}master;
+
+//todo alarm status
+//todo stop 1 min before
+//todo alarm snooze
+//todo actualy toggle alarm
+//todo snooze
 
 //-------------------------------------------------MAIN---------------------------------------------------------------
 
@@ -362,12 +367,6 @@ void extractTimeSerial(char string[])
         AMPM = 1;
         displayAMPM();
     }
-
-
-
-   // printf("%d\t%d\n",now.hour,now.min);
-
-
 }
 
 void wakeUpLights(void)
@@ -407,6 +406,7 @@ void displayAlarm()
 
     sprintf(time,"%.2d",alarm.min);
     displayAt(time,6,2);
+    RTC_C->AMINHR   = alarm.hour<<8 | alarm.min | BIT(15) | BIT(7);
 }
 
 void toggleAMPM2()
@@ -479,7 +479,7 @@ void T32_INT1_IRQHandler()                          //Interrupt Handler for Time
 void T32_INT2_IRQHandler()                          //Interrupt Handler for Timer 2
 {
     TIMER32_2->INTCLR = 1;                          //Clear interrupt flag so it does not interrupt again immediately.
-    if((alarmFlag==1)&(timePresses==0))
+    if((alarmFlag==1)&(timePresses==0)&(alarmSoundFlag==0))
     {
         uint32_t totalAlarm=0,totalTime=0;
         totalAlarm = (alarm.hour * 3600) + (alarm.min*60) + (0)+(!AMPM2 * 12 * 3600);
@@ -496,6 +496,8 @@ void T32_INT2_IRQHandler()                          //Interrupt Handler for Time
             lightsOn = 0;
         }
     }
+    else if(alarmSoundFlag==1)
+        TIMER_A0->CCR[1] = 1000;
     else
         TIMER_A0->CCR[1] = 0;
 }
@@ -519,67 +521,80 @@ void PORT4_IRQHandler()
     //SetTime Button Press
     if(P4->IFG & SETTIME)
     {
-        if((timePresses==0) & (alarmPresses==0))                                  //First press -> Go into time Hours edit
+        if(alarmSoundFlag != 0)
         {
-            RTC_C->PS1CTL   = 0b00000;                      //disable timer clock
-            displayAt("00",8,1);                            //clears seconds
-            timePresses++;
+            if((timePresses==0) & (alarmPresses==0))                                  //First press -> Go into time Hours edit
+            {
+                RTC_C->PS1CTL   = 0b00000;                      //disable timer clock
+                displayAt("00",8,1);                            //clears seconds
+                timePresses++;
+            }
+            else if((timePresses==1) & (alarmPresses==0))
+                timePresses++;
+            else if(timePresses==2)                             //Third press -> Save time
+            {
+                RTC_C->PS1CTL   = 0b11010;                      //Enable timer clock
+                configRTC(now.hour, now.min,now.sec);
+                timePresses = 0;
+            }
         }
-        else if((timePresses==1) & (alarmPresses==0))
-            timePresses++;
-        else if(timePresses==2)                             //Third press -> Save time
-        {
-            RTC_C->PS1CTL   = 0b11010;                      //Enable timer clock
-            configRTC(now.hour, now.min,now.sec);
-            timePresses = 0;
-        }
-
         P4->IFG &= ~SETTIME;
     }
 
     //Alarm toggle/Up Button Press
     if(P4->IFG & (ALARM|UP))
     {
-        if(timePresses==1)                              //Incoment Hours
+        if(alarmSoundFlag == 0)
         {
-            now.hour++;
-            if(now.hour>12)                                //hour Rolls Over
-                now.hour=1;
-            else if(now.hour==12)
+            if(timePresses==1)                              //Incoment Hours
             {
-                toggleAMPM();
-                displayAMPM();
+                now.hour++;
+                if(now.hour>12)                                //hour Rolls Over
+                    now.hour=1;
+                else if(now.hour==12)
+                {
+                    toggleAMPM();
+                    displayAMPM();
+                }
+                displayHour();
             }
-            displayHour();
-        }
-        else if(timePresses==2)                         //incoment Minutes
-        {
-            now.min++;
-            if(now.min>59)
-                now.min=0;                                  //Minutes reset
-            displayMin();
-        }
-        else if(alarmPresses==1)
-        {
-            alarm.hour++;
-            if(alarm.hour>12)
-                alarm.hour=1;
-            else if(alarm.hour==12)
-                toggleAMPM2();
-            displayAlarm();
-        }
-        else if(alarmPresses==2)
-        {
-            alarm.min++;
-            if(alarm.min>59)
+            else if(timePresses==2)                         //incoment Minutes
             {
-                alarm.min=0;
+                now.min++;
+                if(now.min>59)
+                    now.min=0;                                  //Minutes reset
+                displayMin();
             }
-            displayAlarm();
+            else if(alarmPresses==1)
+            {
+                alarm.hour++;
+                if(alarm.hour>12)
+                    alarm.hour=1;
+                else if(alarm.hour==12)
+                    toggleAMPM2();
+                displayAlarm();
+            }
+            else if(alarmPresses==2)
+            {
+                alarm.min++;
+                if(alarm.min>59)
+                {
+                    alarm.min=0;
+                }
+                displayAlarm();
+            }
+            else                                            //toggles alarm output and alarmflag
+            {
+                toggleAlarm();
+            }
         }
-        else                                            //toggles alarm output and alarmflag
+        else if(alarmSoundFlag==1)
         {
-            toggleAlarm();
+            TIMER_A0->CCR[1] = 0;
+            alarmSoundFlag=0;
+            alarm.hour = master.hour;
+            alarm.min = master.min;
+            //turn of alarm for the day set alarm = master
         }
 
         P4->IFG &= ~(ALARM|UP);
@@ -588,55 +603,77 @@ void PORT4_IRQHandler()
     //SetAlarm Button Press
     if(P4->IFG & SETALARM)                              //SetAlarm Button Press
     {
-        if(timePresses==0)
+        if(alarmSoundFlag != 0)
         {
-            alarmPresses++;
+            if(timePresses==0)
+            {
+                alarmPresses++;
+            }
+            if(alarmPresses==3)
+                alarmPresses=0;
         }
-        if(alarmPresses==3)
-            alarmPresses=0;
         P4->IFG &= ~SETALARM;
     }
 
     //Snooze/Down Button Press
     if(P4->IFG & SNOOZE)
     {
-        if(timePresses==1)
+        if(!alarmSoundFlag)
         {
-            now.hour--;
-            if(now.hour<1)                                //hour Rolls Over
-                now.hour=12;
-            if(now.hour==11)
+            if(timePresses==1)
             {
-                toggleAMPM();
-                displayAMPM();
+                now.hour--;
+                if(now.hour<1)                                //hour Rolls Over
+                    now.hour=12;
+                if(now.hour==11)
+                {
+                    toggleAMPM();
+                    displayAMPM();
+                }
+
+                displayHour();
+            }
+            else if((timePresses==2)&(!alarmSoundFlag))                         //incoment Minutes
+            {
+                now.min--;
+                if(now.min>59)
+                    now.min=59;                                  //Minutes reset
+                displayMin();
+            }
+            else if((alarmPresses==1)&(!alarmSoundFlag))
+            {
+                alarm.hour--;
+                master.hour = alarm.hour;
+                if(alarm.hour==0)
+                    alarm.hour=12;
+                else if(alarm.hour==11)
+                    toggleAMPM2();
+                displayAlarm();
+            }
+            else if((alarmPresses==2)&(!alarmSoundFlag))
+            {
+                alarm.min--;
+                master.min = alarm.min;
+                if(alarm.min>100)
+                {
+                    alarm.min=59;
+                }
+                displayAlarm();
+            }
+        }
+        else if(alarmSoundFlag)     //alarm is on and snooze is pressed
+        {
+            displayAt("IO",0,2);
+            //todo here is where we need to extend the time
+            alarm.min = alarm.min + 10;
+            if(alarm.min>59)
+            {
+                //todo
+                alarm.min = alarm.min-59;
+                displayAlarm();
+                //if lights are on
             }
 
-            displayHour();
-        }
-        else if(timePresses==2)                         //incoment Minutes
-        {
-            now.min--;
-            if(now.min>59)
-                now.min=59;                                  //Minutes reset
-            displayMin();
-        }
-        else if(alarmPresses==1)
-        {
-            alarm.hour--;
-            if(alarm.hour==0)
-                alarm.hour=12;
-            else if(alarm.hour==11)
-                toggleAMPM2();
-            displayAlarm();
-        }
-        else if(alarmPresses==2)
-        {
-            alarm.min--;
-            if(alarm.min>100)
-            {
-                alarm.min=59;
-            }
-            displayAlarm();
         }
 
         P4->IFG &= ~SNOOZE;
@@ -699,7 +736,7 @@ void RTC_C_IRQHandler(void)
             if((alarmFlag==1)&(AMPM==AMPM2))
             {
                 P1->OUT ^= BIT0;            //this is what happens when alarm goes off
-                //wakeUpLights();
+                alarmSoundFlag=1;
             }
             RTC_C->CTL0 = 0xA500;
         }
@@ -834,6 +871,8 @@ void intAlarm()
     alarmFlag=1;
     alarm.hour = 7;
     alarm.min = 0;
+    master.hour = alarm.hour;
+    master.min = alarm.min;
 }
 
 void intSpeedButton()
