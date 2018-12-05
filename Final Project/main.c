@@ -110,7 +110,7 @@ char time[2],tempAr[3];
 int RTC_flag =0, timePresses=0, alarmFlag=0, alarmPresses=0, speed=0;
 int AMPM = 1, AMPM2=1;                       //flag to determine AM or PM will be used more for UART functionality to convert 24 hr to 12 hr time
 int lightsOn = 0;                   //flag to be used to check if the wake up lights should be turned on
-int lightBrightness = 0;
+uint32_t lightBrightness = 0;
 float LCDbrightness = 50;
 int blinkFlag = 0;
 
@@ -337,12 +337,20 @@ void extractTimeSerial(char string[])
             writeOutput("INVALID ");
         }
     }
+<<<<<<< HEAD
+    else{
+        configRTC(now.hour, now.min,now.sec);
+        AMPM = 1;
+        displayAMPM();
+    }
+=======
 
 
 
    // printf("%d\t%d\n",now.hour,now.min);
 
 
+>>>>>>> branch 'master' of https://github.com/EGR226GOATGROUP/FINAL-PROJECT.git
 }
 
 void wakeUpLights(void)
@@ -454,15 +462,25 @@ void T32_INT1_IRQHandler()                          //Interrupt Handler for Time
 void T32_INT2_IRQHandler()                          //Interrupt Handler for Timer 2
 {
     TIMER32_2->INTCLR = 1;                          //Clear interrupt flag so it does not interrupt again immediately.
-    lightBrightness+= 10;                           //increase brightness by 1% every interrupt (3 seconds when enabled)
-    TIMER_A0->CCR[1] = lightBrightness;
-    sprintf(time,"%.2d",lightBrightness);
-    if(lightBrightness == 1000)
+    if((alarmFlag==1)&(timePresses==0))
     {
-        TIMER_A0->CCR[1] = 0;
-        TIMER32_2->CONTROL &= ~BIT7;
-        lightsOn = 0;
+        uint32_t totalAlarm=0,totalTime=0;
+        totalAlarm = (alarm.hour * 3600) + (alarm.min*60) + (0)+(!AMPM2 * 12 * 3600);
+        totalTime  = (now.hour*3600) + (now.min*60) + (now.sec)+(!AMPM * 12 * 3600);
+
+        lightBrightness=(1000-((totalAlarm-totalTime)*3.33333333333));
+
+        //lightBrightness+= 10;                           //increase brightness by 1% every interrupt (3 seconds when enabled)
+        TIMER_A0->CCR[1] = lightBrightness;
+        if(lightBrightness > 1000)
+        {
+            TIMER_A0->CCR[1] = 0;
+            TIMER32_2->CONTROL &= ~BIT7;
+            lightsOn = 0;
+        }
     }
+    else
+        TIMER_A0->CCR[1] = 0;
 }
 
 void PORT1_IRQHandler()
@@ -664,6 +682,7 @@ void RTC_C_IRQHandler(void)
             if((alarmFlag==1)&(AMPM==AMPM2))
             {
                 P1->OUT ^= BIT0;            //this is what happens when alarm goes off
+                //wakeUpLights();
             }
             RTC_C->CTL0 = 0xA500;
         }
@@ -881,8 +900,9 @@ void tempT32interrupt(void)
 
 void LEDT32interrupt(void)
 {
-    TIMER32_2->LOAD       =   175781;        //Set interval for interrupt to occur at
-    TIMER32_2->CONTROL       =  0b01101000; //use bit 7 to enable in wake up lights, interrupt enabled, divide by 256, 16 bit mode, wrapping mode
+    TIMER32_2->LOAD       =  10000;        //Set interval for interrupt to occur at
+    TIMER32_2->CONTROL    =  0b01101000; //use bit 7 to enable in wake up lights, interrupt enabled, divide by 256, 16 bit mode, wrapping mode
+    TIMER32_2->CONTROL   |=  BIT7;
     NVIC_EnableIRQ(T32_INT2_IRQn);
 }
 
