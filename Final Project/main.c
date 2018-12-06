@@ -91,7 +91,7 @@ void wakeUpLights(void);
 void LEDT32interrupt(void);
 void intLCDBrightness(void);
 void intBlinkTimerA(void);
-void initTASpeaker(void);
+//void initTASpeaker(void);
 
 
 
@@ -116,7 +116,7 @@ void extractTimeSerial(char string[]);
 
 float tempC=0,tempF = 0, voltage = 0, raw = 0,raw1 = 0,voltage1 = 0;
 char time[2],tempAr[3];
-int RTC_flag =0, timePresses=0, alarmFlag=0, alarmSoundFlag=0, alarmPresses=0, speed=0, lightOn=0, resetNeeded=0;
+int RTC_flag =0, timePresses=0, alarmFlag=0, alarmSoundFlag=0, alarmPresses=0, speed=0, lightOn=0, resetNeeded=0,snoozeFlag=0;
 int AMPM = 1, AMPM2=1;                       //flag to determine AM or PM will be used more for UART functionality to convert 24 hr to 12 hr time
 int lightsOn = 0;                   //flag to be used to check if the wake up lights should be turned on
 uint32_t lightBrightness = 0;
@@ -159,7 +159,7 @@ struct
 //todo snooze
 
 //-------------------------------------------------MAIN---------------------------------------------------------------
-//
+
 
 void main(void)
 {
@@ -178,7 +178,7 @@ void main(void)
     intLCDBrightness();
     intSpeedButton();
     setupSerial();
-    initTASpeaker();
+    //initTASpeaker();
    // initTASpeaker();
 
     commandWrite(CLEAR);
@@ -451,9 +451,9 @@ void T32_INT1_IRQHandler()                          //Interrupt Handler for Time
 void T32_INT2_IRQHandler()                          //Interrupt Handler for Timer 2
 {
     TIMER32_2->INTCLR = 1;                          //Clear interrupt flag so it does not interrupt again immediately.
-    if((alarmFlag==1)&(timePresses==0)&(alarmSoundFlag==0))
+    if((alarmFlag==1)&(timePresses==0)&(alarmSoundFlag==0))//&(snoozeFlag==0))
     {
-        lightOn=1;
+
         uint32_t totalAlarm=0,totalTime=0;
         totalAlarm = (alarm.hour * 3600) + (alarm.min*60) + (0)+(!AMPM2 * 12 * 3600);
         totalTime  = (now.hour*3600) + (now.min*60) + (now.sec)+(!AMPM * 12 * 3600);
@@ -469,15 +469,12 @@ void T32_INT2_IRQHandler()                          //Interrupt Handler for Time
             lightsOn = 0;
             lightOn=0;
         }
-        else if(alarmSoundFlag==1)
-            lightOn=0;
     }
-    else if(alarmSoundFlag==1)
+    else if((alarmSoundFlag==1))
     {
         TIMER_A0->CCR[1] = 1000;
         lightOn=1;
     }
-
     else
     {
         TIMER_A0->CCR[1] = 0;
@@ -533,6 +530,9 @@ void PORT4_IRQHandler()
         {
             resetNeeded=1;
             alarmFlag=0;
+            lightOn=0;
+            alarm.hour = master.hour;
+            alarm.min = master.min;
         }
         else if(!alarmSoundFlag)                    //sound off
         {
@@ -587,6 +587,7 @@ void PORT4_IRQHandler()
             alarm.min = master.min;
             //turn of alarm for the day set alarm = master
         }
+        snoozeFlag=0;
 
         P4->IFG &= ~(ALARM|UP);
     }
@@ -654,7 +655,6 @@ void PORT4_IRQHandler()
         }
         else if(alarmSoundFlag)     //alarm is on and snooze is pressed
         {
-            displayAt("IO",0,2);
 
             alarm.min = alarm.min + 10;
             if(alarm.min>59)
@@ -662,9 +662,11 @@ void PORT4_IRQHandler()
                 //todo
                 alarm.min = alarm.min-59;
                 displayAlarm();
+
                 //if lights are on
             }
-
+            alarmSoundFlag=0;
+            snoozeFlag=1;
         }
 
         P4->IFG &= ~SNOOZE;
@@ -673,7 +675,8 @@ void PORT4_IRQHandler()
 
 void RTC_C_IRQHandler(void)
 {
-    printf("alarmFlag: %d\nalarmSoundFlag: %d\resetNeeded: %d\nlihtOn: %d\n\n",alarmFlag,alarmSoundFlag,resetNeeded,lightOn);
+    //todo
+    //printf("alarmFlag: %d\nalarmSoundFlag: %d\resetNeeded: %d\nlihtOn: %d\n\n",alarmFlag,alarmSoundFlag,resetNeeded,lightOn);
     if(RTC_C->PS1CTL & BIT0)
     {//     speed is low        alarm is off                middle of hour
         if((speed != HIGH) | (((alarm.hour==now.hour)&((alarm.min-now.min)==1)&(AMPM==AMPM2)) |
@@ -695,6 +698,10 @@ void RTC_C_IRQHandler(void)
             }
             RTC_C->TIM0 = now.min<<8 | 00;
             RTC_C->TIM1  = now.hour;
+            if((((alarm.hour==now.hour)&((alarm.min-now.min)==1)&(AMPM==AMPM2)) |
+                    (((alarm.hour-now.hour)==1)&(now.min==59)&(AMPM==AMPM2)&(alarm.min==0)) |
+                    (((now.hour==12)&(alarm.hour==1))&(AMPM!=AMPM2)&(now.min==59)))&(alarmFlag==1))
+                speed=LOW;
         }
 
         if(now.hour > 12) //rolls over time for 12-hour time
@@ -1202,7 +1209,6 @@ void sysTickDelay_us(int microsec) //timer microseconds
     SysTick->VAL = 0;
     while((SysTick->CTRL & BIT(16))==0);
 }
-<<<<<<< HEAD
 
 
 
@@ -1253,12 +1259,4 @@ void sysTickDelay_us(int microsec) //timer microseconds
 //    TIMER_A0->CCR[2] = 0;                           // Turn off timerA to start
 //    TIMER_A0->CTL = 0b1000010100;             // Count Up mode using SMCLK, Clears, Clear Interrupt Flag
 //}
-=======
 
-
-
-
-
-
-
->>>>>>> branch 'master' of https://github.com/EGR226GOATGROUP/FINAL-PROJECT.git
