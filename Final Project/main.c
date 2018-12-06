@@ -155,6 +155,7 @@ struct
 //todo snooze
 
 //-------------------------------------------------MAIN---------------------------------------------------------------
+//
 
 void main(void)
 {
@@ -440,11 +441,13 @@ void T32_INT2_IRQHandler()                          //Interrupt Handler for Time
         TIMER_A0->CCR[1] = lightBrightness;
         if(lightBrightness > 1000)
         {
-            TIMER_A0->CCR[1] = 0;
+            TIMER_A0->CCR[1] = 0;                           //
             TIMER32_2->CONTROL &= ~BIT7;
             lightsOn = 0;
             lightOn=0;
         }
+        else if(alarmSoundFlag==1)
+            lightOn=0;
     }
     else if(alarmSoundFlag==1)
     {
@@ -503,12 +506,12 @@ void PORT4_IRQHandler()
     //Alarm toggle/Up Button Press
     if(P4->IFG & (ALARM|UP))
     {
-        if(lightOn & !alarmSoundFlag)               //reset needed, lights are disabled and the alarm is disabled
+        if(lightOn & !alarmSoundFlag)               //light on sound off
         {
             resetNeeded=1;
             alarmFlag=0;
         }
-        else if(!alarmSoundFlag)
+        else if(!alarmSoundFlag)                    //sound off
         {
             if(timePresses==1)                              //Incoment Hours
             {
@@ -552,10 +555,11 @@ void PORT4_IRQHandler()
                 toggleAlarm();
             }
         }
-        else if(alarmSoundFlag==1)
+        else if(alarmSoundFlag)
         {
             TIMER_A0->CCR[1] = 0;
             alarmSoundFlag=0;
+            lightOn=0;
             alarm.hour = master.hour;
             alarm.min = master.min;
             //turn of alarm for the day set alarm = master
@@ -646,10 +650,12 @@ void PORT4_IRQHandler()
 
 void RTC_C_IRQHandler(void)
 {
+    printf("alarmFlag: %d\nalarmSoundFlag: %d\resetNeeded: %d\nlihtOn: %d\n\n",alarmFlag,alarmSoundFlag,resetNeeded,lightOn);
     if(RTC_C->PS1CTL & BIT0)
     {//     speed is low        alarm is off                middle of hour
         if((speed != HIGH) | (((alarm.hour==now.hour)&((alarm.min-now.min)==1)&(AMPM==AMPM2)) |
-                (((alarm.hour-now.hour)==1)&(now.min==59)&(AMPM==AMPM2)&(alarm.min==0)) | (((now.hour==12)&(alarm.hour==1))&(AMPM!=AMPM2)&(now.min==59)))&(alarmFlag==1))
+                (((alarm.hour-now.hour)==1)&(now.min==59)&(AMPM==AMPM2)&(alarm.min==0)) |
+                (((now.hour==12)&(alarm.hour==1))&(AMPM!=AMPM2)&(now.min==59)))&(alarmFlag==1))
         {           //change of hour                                                changing from AMPM
             now.sec         =   RTC_C->TIM0>>0 & 0x00FF;
             now.min         =   RTC_C->TIM0>>8 & 0x00FF;
@@ -705,7 +711,7 @@ void RTC_C_IRQHandler(void)
             if(resetNeeded)
             {
                 resetNeeded=0;
-                alarmFlag=1;
+                alarmFlag=1;                //
             }
             RTC_C->CTL0 = 0xA500;
         }
