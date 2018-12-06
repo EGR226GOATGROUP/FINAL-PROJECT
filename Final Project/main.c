@@ -91,6 +91,8 @@ void wakeUpLights(void);
 void LEDT32interrupt(void);
 void intLCDBrightness(void);
 void intBlinkTimerA(void);
+void initTASpeaker(void);
+
 
 
 void displayAt(char text[], int place, int line);
@@ -104,6 +106,7 @@ void sysTickDelay_ms(int ms);
 void sysTickDelay_us(int microsec);
 void SysTick_Init();
 void LED_init(void);
+
 
 void setupSerial();
 void writeOutput(char *string); // write output charactrs to the serial port
@@ -119,6 +122,7 @@ int lightsOn = 0;                   //flag to be used to check if the wake up li
 uint32_t lightBrightness = 0;
 float LCDbrightness = 50;
 int blinkFlag = 0;
+int speakerFlag = 0,speakerFlag1 = 0;
 
 enum states{
     SETTIMESERIAL,
@@ -174,6 +178,8 @@ void main(void)
     intLCDBrightness();
     intSpeedButton();
     setupSerial();
+    initTASpeaker();
+   // initTASpeaker();
 
     commandWrite(CLEAR);
 
@@ -183,7 +189,6 @@ void main(void)
     P1->DIR |= BIT0;
     P1->OUT &= ~BIT0;
     TIMER_A0->CCR[4] = 1000;
-
     __enable_interrupt();
     configRTC(6, 59,55);
 
@@ -192,6 +197,14 @@ int tempHour = 0,tempHourA;
 timePresses=0;
     while(1)
     {
+        if(speakerFlag)
+        {
+            TIMER_A2->CCR[4] = 3000;  //50% duty cycle
+            sysTickDelay_ms(1000);
+            TIMER_A2->CCR[4] = 0;
+            sysTickDelay_ms(1000);
+            speakerFlag = 0;
+        }
         tempHour = now.hour;
         tempHourA = alarm.hour;
         readInput(string); // Read the input up to \n, store in string.  This function doesn't return until \n is received
@@ -417,6 +430,16 @@ void displayHour()                                  //Displays the hour with the
 
 
 //--------------------------------------------------Interrupts------------------------------------------------------------------------
+void TA2_N_IRQHandler()
+{
+    if((TIMER_A2->CCTL[4] & BIT0) & alarmSoundFlag)
+    {
+        TIMER_A2->CCTL[4] &= ~BIT0;
+        speakerFlag = 1;
+    }
+    TIMER_A2->CCTL[4] &= ~BIT0;
+}
+
 
 void T32_INT1_IRQHandler()                          //Interrupt Handler for Timer 2
 {
@@ -707,6 +730,7 @@ void RTC_C_IRQHandler(void)
             {
                 P1->OUT ^= BIT0;            //this is what happens when alarm goes off
                 alarmSoundFlag=1;
+
             }
             if(resetNeeded)
             {
@@ -810,9 +834,25 @@ void TA3_N_IRQHandler()
         //ADD CODE TO BLINK TIME HERE
        //  use -> NVIC_DisableIRQ(TA3_N_IRQn); to turn off blinking
     }
+
+
 }
 
 //------------------------------------------------------------Initilizations-----------------------------------------------------------------------
+
+void initTASpeaker(void)
+{
+    P6->SEL0 |= BIT7;
+    P6->SEL1 &= ~BIT7;
+    P6->DIR |= BIT7;
+
+
+    TIMER_A2->CCR[0] = 6000;                           // Turn off timerA to start
+    TIMER_A2->CCTL[4] = 0b11110000;         // Setup Timer A0_2 Reset/Set, Interrupt, No Output
+    TIMER_A2->CCR[4] = 0;                           // Turn off timerA to start
+    TIMER_A2->CTL = 0b1000010110;             // Count Up mode using SMCLK, Clears, Clear Interrupt Flag
+    NVIC_EnableIRQ(TA2_N_IRQn);
+}
 
 
 void intBlinkTimerA(void)
@@ -1162,6 +1202,7 @@ void sysTickDelay_us(int microsec) //timer microseconds
     SysTick->VAL = 0;
     while((SysTick->CTRL & BIT(16))==0);
 }
+<<<<<<< HEAD
 
 
 
@@ -1212,3 +1253,12 @@ void sysTickDelay_us(int microsec) //timer microseconds
 //    TIMER_A0->CCR[2] = 0;                           // Turn off timerA to start
 //    TIMER_A0->CTL = 0b1000010100;             // Count Up mode using SMCLK, Clears, Clear Interrupt Flag
 //}
+=======
+
+
+
+
+
+
+
+>>>>>>> branch 'master' of https://github.com/EGR226GOATGROUP/FINAL-PROJECT.git
