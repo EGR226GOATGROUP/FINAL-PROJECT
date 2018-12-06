@@ -91,7 +91,6 @@ void wakeUpLights(void);
 void LEDT32interrupt(void);
 void intLCDBrightness(void);
 void intBlinkTimerA(void);
-void initTASpeaker(void);
 
 
 
@@ -177,8 +176,7 @@ void main(void)
     intLCDBrightness();
     intSpeedButton();
     setupSerial();
-    initTASpeaker();
-   // initTASpeaker();
+
 
     commandWrite(CLEAR);
 
@@ -196,14 +194,7 @@ int tempHour = 0,tempHourA;
 timePresses=0;
     while(1)
     {
-        if(speakerFlag)
-        {
-            TIMER_A2->CCR[4] = 3000;  //50% duty cycle
-            sysTickDelay_ms(1000);
-            TIMER_A2->CCR[4] = 0;
-            sysTickDelay_ms(1000);
-            speakerFlag = 0;
-        }
+
         tempHour = now.hour;
         tempHourA = alarm.hour;
         readInput(string); // Read the input up to \n, store in string.  This function doesn't return until \n is received
@@ -833,21 +824,6 @@ void TA3_N_IRQHandler()
 }
 
 //------------------------------------------------------------Initilizations-----------------------------------------------------------------------
-
-void initTASpeaker(void)
-{
-    P6->SEL0 |= BIT7;
-    P6->SEL1 &= ~BIT7;
-    P6->DIR |= BIT7;
-
-
-    TIMER_A2->CCR[0] = 6000;                           // Turn off timerA to start
-    TIMER_A2->CCTL[4] = 0b11110000;         // Setup Timer A0_2 Reset/Set, Interrupt, No Output
-    TIMER_A2->CCR[4] = 0;                           // Turn off timerA to start
-    TIMER_A2->CTL = 0b1000010110;             // Count Up mode using SMCLK, Clears, Clear Interrupt Flag
-    NVIC_EnableIRQ(TA2_N_IRQn);
-}
-
 
 void intBlinkTimerA(void)
 {
