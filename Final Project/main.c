@@ -94,6 +94,7 @@ void intBlinkTimerA(void);
 
 
 
+
 void displayAt(char text[], int place, int line);
 void LCD_init(void);
 void commandWrite(uint8_t command);
@@ -105,7 +106,7 @@ void sysTickDelay_ms(int ms);
 void sysTickDelay_us(int microsec);
 void SysTick_Init();
 void LED_init(void);
-
+void initTA2();
 
 void setupSerial();
 void writeOutput(char *string); // write output charactrs to the serial port
@@ -115,13 +116,13 @@ void extractTimeSerial(char string[]);
 
 float tempC=0,tempF = 0, voltage = 0, raw = 0,raw1 = 0,voltage1 = 0;
 char time[2],tempAr[3];
-int RTC_flag =0, timePresses=0, alarmFlag=0, alarmSoundFlag=0, alarmPresses=0, speed=0, lightOn=0, resetNeeded=0;
+int RTC_flag =0, timePresses=0, alarmFlag=0, alarmSoundFlag=0, alarmPresses=0, speed=0, lightOn=0, resetNeeded=0,snoozeFlag=0;
 int AMPM = 1, AMPM2=1;                       //flag to determine AM or PM will be used more for UART functionality to convert 24 hr to 12 hr time
 int lightsOn = 0;                   //flag to be used to check if the wake up lights should be turned on
 uint32_t lightBrightness = 0;
 float LCDbrightness = 50;
 int blinkFlag = 0;
-int speakerFlag = 0,speakerFlag1 = 0;
+int speakerFlag = 0,speakerFlag1 = 0,alarmSoundToggle = 1;
 
 enum states{
     SETTIMESERIAL,
@@ -159,8 +160,9 @@ struct
 
 //-------------------------------------------------MAIN---------------------------------------------------------------
 
+
 void main(void)
-{
+ {
     WDT_A->CTL = WDT_A_CTL_PW | WDT_A_CTL_HOLD;     // stop watchdog timer
     //Initilizing Interupts
     __disable_interrupt();
@@ -176,6 +178,7 @@ void main(void)
     intLCDBrightness();
     intSpeedButton();
     setupSerial();
+    initTA2();
 
 
     commandWrite(CLEAR);
@@ -420,15 +423,6 @@ void displayHour()                                  //Displays the hour with the
 
 
 //--------------------------------------------------Interrupts------------------------------------------------------------------------
-void TA2_N_IRQHandler()
-{
-    if((TIMER_A2->CCTL[4] & BIT0) & alarmSoundFlag)
-    {
-        TIMER_A2->CCTL[4] &= ~BIT0;
-        speakerFlag = 1;
-    }
-    TIMER_A2->CCTL[4] &= ~BIT0;
-}
 
 
 void T32_INT1_IRQHandler()                          //Interrupt Handler for Timer 2
@@ -441,9 +435,9 @@ void T32_INT1_IRQHandler()                          //Interrupt Handler for Time
 void T32_INT2_IRQHandler()                          //Interrupt Handler for Timer 2
 {
     TIMER32_2->INTCLR = 1;                          //Clear interrupt flag so it does not interrupt again immediately.
-    if((alarmFlag==1)&(timePresses==0)&(alarmSoundFlag==0))
+    if((alarmFlag==1)&(timePresses==0)&(alarmSoundFlag==0))//&(snoozeFlag==0))
     {
-        lightOn=1;
+        lightOn = 1;
         uint32_t totalAlarm=0,totalTime=0;
         totalAlarm = (alarm.hour * 3600) + (alarm.min*60) + (0)+(!AMPM2 * 12 * 3600);
         totalTime  = (now.hour*3600) + (now.min*60) + (now.sec)+(!AMPM * 12 * 3600);
@@ -454,18 +448,17 @@ void T32_INT2_IRQHandler()                          //Interrupt Handler for Time
         TIMER_A0->CCR[1] = lightBrightness;
         if(lightBrightness > 1000)
         {
-            TIMER_A0->CCR[1] = 0;
+            TIMER_A0->CCR[1] = 0;                           //
             TIMER32_2->CONTROL &= ~BIT7;
             lightsOn = 0;
             lightOn=0;
         }
     }
-    else if(alarmSoundFlag==1)
+    else if((alarmSoundFlag==1))
     {
         TIMER_A0->CCR[1] = 1000;
         lightOn=1;
     }
-
     else
     {
         TIMER_A0->CCR[1] = 0;
@@ -517,12 +510,14 @@ void PORT4_IRQHandler()
     //Alarm toggle/Up Button Press
     if(P4->IFG & (ALARM|UP))
     {
-        if(lightOn & !alarmSoundFlag)               //reset needed, lights are disabled and the alarm is disabled
+        if(lightOn & !alarmSoundFlag)               //light on sound off
         {
             resetNeeded=1;
             alarmFlag=0;
+            alarm.hour = master.hour;
+            alarm.min = master.min;
         }
-        else if(!alarmSoundFlag)
+        else if(!alarmSoundFlag)                    //sound off
         {
             if(timePresses==1)                              //Incoment Hours
             {
@@ -566,14 +561,16 @@ void PORT4_IRQHandler()
                 toggleAlarm();
             }
         }
-        else if(alarmSoundFlag==1)
+        else if(alarmSoundFlag)
         {
             TIMER_A0->CCR[1] = 0;
             alarmSoundFlag=0;
+            lightOn=0;
             alarm.hour = master.hour;
             alarm.min = master.min;
             //turn of alarm for the day set alarm = master
         }
+        snoozeFlag=0;
 
         P4->IFG &= ~(ALARM|UP);
     }
@@ -641,7 +638,6 @@ void PORT4_IRQHandler()
         }
         else if(alarmSoundFlag)     //alarm is on and snooze is pressed
         {
-            displayAt("IO",0,2);
 
             alarm.min = alarm.min + 10;
             if(alarm.min>59)
@@ -649,9 +645,11 @@ void PORT4_IRQHandler()
                 //todo
                 alarm.min = alarm.min-59;
                 displayAlarm();
+
                 //if lights are on
             }
-
+            alarmSoundFlag=0;
+            snoozeFlag=1;
         }
 
         P4->IFG &= ~SNOOZE;
@@ -660,10 +658,13 @@ void PORT4_IRQHandler()
 
 void RTC_C_IRQHandler(void)
 {
+    //todo
+    //printf("alarmFlag: %d\nalarmSoundFlag: %d\resetNeeded: %d\nlihtOn: %d\n\n",alarmFlag,alarmSoundFlag,resetNeeded,lightOn);
     if(RTC_C->PS1CTL & BIT0)
     {//     speed is low        alarm is off                middle of hour
         if((speed != HIGH) | (((alarm.hour==now.hour)&((alarm.min-now.min)==1)&(AMPM==AMPM2)) |
-                (((alarm.hour-now.hour)==1)&(now.min==59)&(AMPM==AMPM2)&(alarm.min==0)) | (((now.hour==12)&(alarm.hour==1))&(AMPM!=AMPM2)&(now.min==59)))&(alarmFlag==1))
+                (((alarm.hour-now.hour)==1)&(now.min==59)&(AMPM==AMPM2)&(alarm.min==0)) |
+                (((now.hour==12)&(alarm.hour==1))&(AMPM!=AMPM2)&(now.min==59)))&(alarmFlag==1))
         {           //change of hour                                                changing from AMPM
             now.sec         =   RTC_C->TIM0>>0 & 0x00FF;
             now.min         =   RTC_C->TIM0>>8 & 0x00FF;
@@ -680,6 +681,10 @@ void RTC_C_IRQHandler(void)
             }
             RTC_C->TIM0 = now.min<<8 | 00;
             RTC_C->TIM1  = now.hour;
+            if((((alarm.hour==now.hour)&((alarm.min-now.min)==1)&(AMPM==AMPM2)) |
+                    (((alarm.hour-now.hour)==1)&(now.min==59)&(AMPM==AMPM2)&(alarm.min==0)) |
+                    (((now.hour==12)&(alarm.hour==1))&(AMPM!=AMPM2)&(now.min==59)))&(alarmFlag==1))
+                speed=LOW;
         }
 
         if(now.hour > 12) //rolls over time for 12-hour time
@@ -720,9 +725,27 @@ void RTC_C_IRQHandler(void)
             if(resetNeeded)
             {
                 resetNeeded=0;
-                alarmFlag=1;
+                alarmFlag=1;                //
             }
             RTC_C->CTL0 = 0xA500;
+        }
+        if(alarmSoundFlag)
+        {
+            if(alarmSoundToggle)
+            {
+                TIMER_A2->CCR[4] = 3000;
+                alarmSoundToggle = 0;
+            }
+            else if(!alarmSoundToggle)
+            {
+                TIMER_A2->CCR[4] = 0;
+                alarmSoundToggle = 1;
+            }
+        }
+        else
+        {
+            TIMER_A2->CCR[4] = 0;
+            alarmSoundToggle = 1;
         }
     }
 }
@@ -732,6 +755,7 @@ void ADC14_IRQHandler(void)
     ADC14->CLRIFGR1     &=    ~0b1111110;                 // Clear all IFGR1 Interrupts (Bits 6-1.  These could trigger an interrupt and we are checking them for now.)
     if(ADC14->IFGR0 & BIT0)
     {
+
             raw = ADC14->MEM[0];
             ADC14->CLRIFGR0     &=  ~BIT1;                  // Clear MEM1 interrupt flag
             voltage = raw*(3.3/16383);
@@ -753,9 +777,15 @@ void ADC14_IRQHandler(void)
     }
     if(ADC14->IFGR0 & BIT1)
     {
-        raw1 = ADC14->MEM[1];
-        voltage1 = raw1*(3.3/16383);
-        TIMER_A0->CCR[4] = voltage1*303;
+        if(alarmSoundFlag)
+        {
+            TIMER_A0->CCR[4] = 1000;
+        }
+        else{
+            raw1 = ADC14->MEM[1];
+            voltage1 = raw1*(3.3/16383);
+            TIMER_A0->CCR[4] = voltage1*303;
+        }
         ADC14->CLRIFGR0 &=  ~BIT1;                  // Clear MEM1 interrupt flag
     }
     ADC14->CLRIFGR1     &=    ~0b1111110;
@@ -824,7 +854,17 @@ void TA3_N_IRQHandler()
 }
 
 //------------------------------------------------------------Initilizations-----------------------------------------------------------------------
+void initTA2()
+{
+    P6->SEL0 |= BIT7;
+    P6->SEL1 &= ~BIT7;
+    P6->DIR |= BIT7;
 
+    TIMER_A2->CCR[0] = 6000-1;
+    TIMER_A2->CTL = 0b1000010100;
+    TIMER_A2->CCTL[4] = 0b11100000;
+    TIMER_A2->CCR[4] = 0;
+}
 void intBlinkTimerA(void)
 {
     P9->SEL0 |= BIT3;
@@ -1001,6 +1041,7 @@ void readInput(char *string)
     int i = 0;  // Location in the char array "string" that is being written to
 
     // One of the few do/while loops I've written, but need to read a character before checking to see if a \n has been read
+
     do
     {
         // If a new line hasn't been found yet, but we are caught up to what has been received, wait here for new data
@@ -1010,11 +1051,14 @@ void readInput(char *string)
         i++; // Increment the location in "string" for next piece of data
         read_location++; // Increment location in INPUT_BUFFER that has been read
         if(read_location == BUFFER_SIZE)  // If the end of INPUT_BUFFER has been reached, loop back to 0
+        {
             read_location = 0;
+        }
     }
     while(string[i-1] != '\n'); // If a \n was just read, break out of the while loop
 
     string[i-1] = '\0'; // Replace the \n with a \0 to end the string when returning this function
+
 }
 
 void EUSCIA0_IRQHandler(void)
@@ -1176,6 +1220,50 @@ void sysTickDelay_us(int microsec) //timer microseconds
 
 
 
-
-
+//#include "msp.h"
+//#include <stdio.h>
+//#include <string.h>
+//void initTASpeaker(void);
+//
+//void SysTick_Init(void) //initializes systick timer
+//{
+//    SysTick->CTRL = 0;
+//    SysTick->LOAD = 0x00FFFFFF; //sets max value
+//    SysTick->VAL = 0; //sets min value
+//    SysTick->CTRL = 0x00000005; //enables timer
+//}
+//
+//void sysTickDelay_ms(int ms) //timer ms
+//{
+//    SysTick->LOAD = ((ms*3000)-1);
+//    SysTick->VAL = 0;
+//    while((SysTick->CTRL & BIT(16))==0);
+//}
+//
+//
+//void main(void)
+//{
+//    WDT_A->CTL = WDT_A_CTL_PW | WDT_A_CTL_HOLD;     // stop watchdog timer
+//    initTASpeaker();
+//    SysTick_Init();
+//    while(1)
+//    {
+//        TIMER_A0->CCR[0] = 6000;  //Math in an interrupt is bad behavior, but shows how things are happening.  This takes our clock and divides by the frequency of this note to get the period.
+//        TIMER_A0->CCR[2] = 3000;  //50% duty cycle
+//        sysTickDelay_ms(1000);
+//        TIMER_A0->CCR[2] = 0;
+//        sysTickDelay_ms(1000);
+//    }
+//}
+//
+//void initTASpeaker(void)
+//{
+//    P2->SEL0 |= BIT5;
+//    P2->SEL1 &= BIT5;
+//    P2->DIR |= BIT5;
+//    TIMER_A0->CCR[0] = 0;                           // Turn off timerA to start
+//    TIMER_A0->CCTL[2] = 0b11100000;         // Setup Timer A0_2 Reset/Set, Interrupt, No Output
+//    TIMER_A0->CCR[2] = 0;                           // Turn off timerA to start
+//    TIMER_A0->CTL = 0b1000010100;             // Count Up mode using SMCLK, Clears, Clear Interrupt Flag
+//}
 
